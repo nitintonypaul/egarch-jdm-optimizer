@@ -11,29 +11,33 @@
 namespace py = pybind11;*/
 
 // Function Declarations
-double estimate(int days, double vol, double shockarray[]);
+double estimate(int no_days, double volatility, double shockarray[]);
 void optimize(double shockarray[]);
 void compute_gradient(double shockarray[]);
-double L();
+double compute_sigma_t(int t, double shockarray[]);
 double compute_volatility();
 
 // Parameters
 double parameters[] = {0.1,0.9,-0.1,-0.1}; // Order: Alpha, Beta, Omega, Gamma
 
 // Gradient array
-static double gradient[4];
+double gradient[4] = {0, 0, 0, 0};
 
 // Initialising global variables
 double lambda = 0.01;
 int days;
 double vol;
 
-double estimate( int days, double vol, double shockarray[]) {
+double estimate( int no_days, double volatility, double shockarray[]) {
+
+    // Assigning global variables
+    days = no_days;
+    vol = volatility;
 
     // Calling the optimizing function to find parameters
     optimize(shockarray);
 
-    //Returning computed volatility
+    // Returning computed volatility
     compute_volatility();
 
     return 1.1;
@@ -42,11 +46,13 @@ double estimate( int days, double vol, double shockarray[]) {
 // Conjugate Gradient Optimization 
 void optimize(double shockarray[]) {
 
+    // Computing initial gradient 
     compute_gradient(shockarray);
 
     // Finding direction
     double direction[4];
     
+    // Loop to iterate through direction and assign
     for (int i = 0; i < 4; i++) {
         direction[i] = -gradient[i];
     }
@@ -56,31 +62,115 @@ void optimize(double shockarray[]) {
         parameters[i] = parameters[i] + (lambda * direction[i]);
     }
 
+    // Optimization set to 1000 iterations as limit
     for (int i = 0; i < 1000; i++) {
+        
+        // FLETCHER REEVES
+        // Declaring beta as the denominator product and computing
         double beta = 0;
         for (int j = 0; j < 4; j++) {
             beta += gradient[j] * gradient[j];
         }
 
+        // Declaring numerator product
         double betaplus = 0;
 
+        // Computing next gradient
         compute_gradient(shockarray);
         
+        // Computing numerator product
         for (int j = 0; j < 4; j++) {
                 betaplus += gradient[j] * gradient[j];
         }
         
+        // Computing beta_k (beta)
+        // Used for updating direction
         beta = betaplus / beta;
 
+        // Updating direction
         for(int j = 0; j < 4; j++) {
             direction[j] = -gradient[j] + (beta * direction[j]);
         }
 
+        // Updating parameters
         for (int j = 0; j < 4; j++) {
             parameters[j] = parameters[j] + (lambda * direction[j]);
         }
+
+        // Repeat until 1000. Can implement break-out conditions.
     }
 
+}
+
+// Function to compute gradient based on current parameter values
+void compute_gradient(double shockarray[]) {
+
+    // Resetting gradient
+    gradient[0] = 0;
+    gradient[1] = 0;
+    gradient[2] = 0;
+    gradient[3] = 0;
+
+    // Parent Summation loop
+    for (int i = 0; i < days; i++) {
+        
+        // Caching sigma-t
+        double sigma_t = compute_sigma_t(i, shockarray);
+
+        // Adding immediate derivative
+        double alpha_der = 0.5 * (1 - (std::pow(shockarray[i] / sigma_t,2)));
+        double beta_der = 0.5 * (1 - (std::pow(shockarray[i] / sigma_t,2)));
+        double omega_der = 0.5 * (1 - (std::pow(shockarray[i] / sigma_t,2)));
+        double gamma_der = 0.5 * (1 - (std::pow(shockarray[i] / sigma_t,2)));
+
+        // Variable to store separate recursive derivatives
+        double alpha_var = 0, beta_var = 0, omega_var = 0, gamma_var = 0;
+
+        // Separate Recursive derivatives
+        for(int j = 0; j < i; j++) {
+
+            // Caching variables
+            double sigma_j = compute_sigma_t(i-j, shockarray);
+            double temp_beta = std::pow(parameters[1], j);
+
+            // Alpha recursive derivative
+            alpha_var += temp_beta * std::abs((shockarray[i-j]/sigma_j) - 1);
+
+            //Beta recursive derivative
+            beta_var += temp_beta * std::log(std::pow(sigma_j,2));
+
+            // Omega recursive derivative
+            omega_var += temp_beta;
+
+            //Gamma recursive derivative
+            gamma_var += temp_beta * ((shockarray[i-j]/sigma_j) - 1);
+        }
+
+        // Adding to gradient vector to form gradient (after multiplication)
+        gradient[0] += alpha_der * alpha_var;
+        gradient[1] += beta_der * beta_var;
+        gradient[2] += omega_der * omega_var;
+        gradient[3] += gamma_der * gamma_var;
+    }
+}
+
+// Function to compute volatility (sigma_t) under current parameters
+double compute_sigma_t(int t, double shockarray[]) {
+    
+    // Declaring sig (volatility)
+    double sig = vol;
+
+    // Checking if t is 0, then sig is returned
+    if (t == 0) return sig;
+
+    // Computing volatility under current parameters
+    for (int i = 1; i <= t; i++) {
+        double logsigsq = parameters[2] + (parameters[1] * std::log(std::pow(sig, 2))) + (parameters[0] * std::abs(shockarray[i-1] / sig)) + (parameters[3] * (shockarray[i-1] / sig));
+        sig = std::sqrt(std::exp(logsigsq));
+    }
+
+    // returning final volatility
+    return sig;
 }
 
 int main() {
