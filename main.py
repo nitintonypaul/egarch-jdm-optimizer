@@ -5,6 +5,7 @@ import sys
 
 # Custom modules 
 from py_modules.data_handler import compute_elements
+from egarch import estimate
 
 # Argument object
 parser = argparse.ArgumentParser(description="Process stocks and investments")
@@ -14,7 +15,11 @@ parser.add_argument('--stock', action='append', help="Ticker Symbol", required=T
 parser.add_argument('--investment', action='append', type=float, help="Investment amount", required=True)
 
 # Parsing arguments
-args = parser.parse_args()
+try:
+    args = parser.parse_args()
+except:
+    print("Please include the above arguments and try again.")
+    sys.exit(0)
 
 # Obtaining stocks list and the corresponding investments list
 stocks = args.stock
@@ -49,8 +54,9 @@ for i in stocks:
 
     # Obtaining volatility and shock array
     vol, shock_array = compute_elements(prices, returns_array)
-    
+
     # Computing expected volatility using EGARCH
-    # Soon
-    print(len(shock_array))
-    print(vol)
+    expected_volatility = estimate(len(shock_array),vol,shock_array)
+    
+    print(expected_volatility)
+    
