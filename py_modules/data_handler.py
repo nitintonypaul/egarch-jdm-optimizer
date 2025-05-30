@@ -16,3 +16,12 @@ def compute_elements(prices, returns_array):
     shock_array = list(np.log(returns_array / returns_array.shift(1)).dropna() - mu)
 
     return vol, shock_array
+
+# Function to compute mean
+def compute_mean(returns_array):
+
+    # Computing log returns using NumPy
+    log = np.log(returns_array / returns_array.shift(1)).dropna()
+
+    # Returning mean
+    return log.mean()
