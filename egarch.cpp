@@ -11,19 +11,77 @@
 namespace py = pybind11;*/
 
 // Function Declarations
-void optimize();
 double estimate(int days, double vol, double shockarray[]);
+void optimize(double shockarray[]);
+void compute_gradient(double shockarray[]);
 double L();
+double compute_volatility();
 
-// Parameters (Global)
-double omega = -0.1;
-double alpha = 0.1;
-double beta = 0.9;
-double gamma = -0.1;
+// Parameters
+double parameters[] = {0.1,0.9,-0.1,-0.1}; // Order: Alpha, Beta, Omega, Gamma
 
-// Step value and learning rate
-double learning_rate = 0.001;
-double step_value = 0.0001;
+// Gradient array
+static double gradient[4];
+
+// Initialising global variables
+double lambda = 0.01;
+int days;
+double vol;
+
+double estimate( int days, double vol, double shockarray[]) {
+
+    // Calling the optimizing function to find parameters
+    optimize(shockarray);
+
+    //Returning computed volatility
+    compute_volatility();
+
+    return 1.1;
+}
+
+// Conjugate Gradient Optimization 
+void optimize(double shockarray[]) {
+
+    compute_gradient(shockarray);
+
+    // Finding direction
+    double direction[4];
+    
+    for (int i = 0; i < 4; i++) {
+        direction[i] = -gradient[i];
+    }
+
+    // Optimizing parameters
+    for (int i = 0; i < 4; i++) {
+        parameters[i] = parameters[i] + (lambda * direction[i]);
+    }
+
+    for (int i = 0; i < 1000; i++) {
+        double beta = 0;
+        for (int j = 0; j < 4; j++) {
+            beta += gradient[j] * gradient[j];
+        }
+
+        double betaplus = 0;
+
+        compute_gradient(shockarray);
+        
+        for (int j = 0; j < 4; j++) {
+                betaplus += gradient[j] * gradient[j];
+        }
+        
+        beta = betaplus / beta;
+
+        for(int j = 0; j < 4; j++) {
+            direction[j] = -gradient[j] + (beta * direction[j]);
+        }
+
+        for (int j = 0; j < 4; j++) {
+            parameters[j] = parameters[j] + (lambda * direction[j]);
+        }
+    }
+
+}
 
 int main() {
 
