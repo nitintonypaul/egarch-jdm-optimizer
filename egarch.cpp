@@ -1,6 +1,4 @@
-// Using math defines to utilize PI
 // Including modules
-#define _USE_MATH_DEFINES
 #include <iostream>
 #include <cmath>
 #include <vector>
@@ -27,6 +25,7 @@ double gradient[4] = {0, 0, 0, 0};
 double lambda = 0.01;
 int days;
 double vol;
+const double LOG_CLAMP = 700.0;
 
 double estimate( int no_days, double volatility, double shockarray[]) {
 
@@ -111,46 +110,44 @@ void compute_gradient(double shockarray[]) {
     gradient[2] = 0;
     gradient[3] = 0;
 
+    // Declaring PSI
+    double PSI[4] = {0,0,0,0};
+
     // Parent Summation loop
-    for (int i = 0; i < days; i++) {
+    for (int i = 1; i < days; i++) {
         
-        // Caching sigma-t
+        // Caching constants
+        // Computing sigma and checking for near zero cases
         double sigma_t = compute_sigma_t(i, shockarray);
+        double sigma_prev = compute_sigma_t(i-1, shockarray);
+        if (std::abs(sigma_t) < 1e-9) sigma_t = 1e-9;
+        if (std::abs(sigma_prev) < 1e-9) sigma_prev = 1e-9;
+
+        // Computing Z_t
+        double z_t = shockarray[i] / sigma_t;
+        double z_t_prev = shockarray[i-1] / sigma_prev;
+
+        // Other parameters
+        double M_t = -0.5 * ((parameters[0] * std::abs(z_t_prev)) + parameters[3] * (z_t_prev));
+        double PSI_multiple = parameters[1] + M_t;
+        double CT[] = {std::abs(z_t_prev), std::log(std::pow(sigma_prev,2)), 1, z_t_prev};
 
         // Adding immediate derivative
-        double alpha_der = 0.5 * (1 - (std::pow(shockarray[i] / sigma_t,2)));
-        double beta_der = 0.5 * (1 - (std::pow(shockarray[i] / sigma_t,2)));
-        double omega_der = 0.5 * (1 - (std::pow(shockarray[i] / sigma_t,2)));
-        double gamma_der = 0.5 * (1 - (std::pow(shockarray[i] / sigma_t,2)));
+        double alpha_der = 0.5 * (1 - std::pow(z_t,2));
+        double beta_der = 0.5 * (1 - std::pow(z_t,2));
+        double omega_der = 0.5 * (1 - std::pow(z_t,2));
+        double gamma_der = 0.5 * (1 - std::pow(z_t,2));
 
-        // Variable to store separate recursive derivatives
-        double alpha_var = 0, beta_var = 0, omega_var = 0, gamma_var = 0;
-
-        // Separate Recursive derivatives
-        for(int j = 0; j < i; j++) {
-
-            // Caching variables
-            double sigma_j = compute_sigma_t(i-j, shockarray);
-            double temp_beta = std::pow(parameters[1], j);
-
-            // Alpha recursive derivative
-            alpha_var += temp_beta * std::abs((shockarray[i-j]/sigma_j) - 1);
-
-            //Beta recursive derivative
-            beta_var += temp_beta * std::log(std::pow(sigma_j,2));
-
-            // Omega recursive derivative
-            omega_var += temp_beta;
-
-            //Gamma recursive derivative
-            gamma_var += temp_beta * ((shockarray[i-j]/sigma_j) - 1);
+        // Updating PSI with the previous value
+        for(int j = 0; j < 4; j++) {
+            PSI[j] = CT[j] + (PSI_multiple * PSI[j]);
         }
 
-        // Adding to gradient vector to form gradient (after multiplication)
-        gradient[0] += alpha_der * alpha_var;
-        gradient[1] += beta_der * beta_var;
-        gradient[2] += omega_der * omega_var;
-        gradient[3] += gamma_der * gamma_var;
+        // Multiplying with parameter derivatives and adding to the gradient
+        gradient[0] += alpha_der * PSI[0];
+        gradient[1] += beta_der * PSI[1];
+        gradient[2] += omega_der * PSI[2];
+        gradient[3] += gamma_der * PSI[3];
     }
 }
 
@@ -165,7 +162,17 @@ double compute_sigma_t(int t, double shockarray[]) {
 
     // Computing volatility under current parameters
     for (int i = 1; i <= t; i++) {
+
+        // Ensuring sig is in range
+        if (std::abs(sig) < 1e-9) sig = 1e-9;
+
+        // EGARCH equation to compute logarithmic volatility squared
         double logsigsq = parameters[2] + (parameters[1] * std::log(std::pow(sig, 2))) + (parameters[0] * std::abs(shockarray[i-1] / sig)) + (parameters[3] * (shockarray[i-1] / sig));
+
+        //Ensuring logsigsq stays in range
+        logsigsq = std::max(-LOG_CLAMP, std::min(logsigsq, LOG_CLAMP));
+
+        // Assigning volatility to setup for next iteration
         sig = std::sqrt(std::exp(logsigsq));
     }
 
