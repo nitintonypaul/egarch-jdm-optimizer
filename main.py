@@ -7,8 +7,8 @@ import numpy as np
 
 # Custom modules 
 from py_modules.data_handler import compute_elements, compute_mean
-from egarch import estimate
-from merton import simulate
+from build_modules.egarch import estimate
+from build_modules.merton import simulate
 
 # Argument object
 parser = argparse.ArgumentParser(description="Process stocks and investments")
