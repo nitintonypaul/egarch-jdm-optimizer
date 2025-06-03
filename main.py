@@ -7,8 +7,13 @@ import numpy as np
 
 # Custom modules 
 from py_modules.data_handler import compute_elements, compute_mean
+from py_modules.data_display import display_data, display_summary
 from build_modules.egarch import estimate
 from build_modules.merton import simulate
+
+# Decorative function
+def decor():
+    print("==============================================================")
 
 # Argument object
 parser = argparse.ArgumentParser(description="Process stocks and investments")
@@ -34,8 +39,24 @@ if len(stocks) != len(investments):
     print("Every stock does not have a corresponding investment. Please Try again.")
     sys.exit(0)
 
+# Introduction to the program
+decor()
+print("EGARCH & JDM BASED PORTFOLIO OPTIMIZER")
+decor()
+print(" ")
+print(" ")
+
 # Defining time in terms of trading years
 time = 1/252
+
+# Table headers and data list
+headers = ["STOCK","INVESTMENT","CURRENT PRICE", "EXPECTED PRICE", "EXPECTED RETURN", "GAIN/LOSS (%)"]
+datalist = []
+
+# Some decoration
+decor()
+print("EGARCH VOLATILITY ESTIMATES")
+decor()
 
 # For each stock in stocks
 for i in range(len(stocks)):
@@ -81,24 +102,16 @@ for i in range(len(stocks)):
     # Obtaining average jump (Logarithmic)
     ksum = 0
     for i in jumps:
-        ksum+=math.log(1+i)
+        ksum += math.log(1+i)
     
     # Considering case if jumps array is empty
-    if len(jumps) == 0:
-        k = 0
-    else:
-        k = ksum/len(jumps)
+    k = 0 if len(jumps) == 0 else ksum/len(jumps)
 
     # Computing jump volatility
-    jump_vol_array = []
-    for i in jumps:
-        jump_vol_array.append(math.log(1+i))
+    jump_vol_array = [math.log(1+i) for i in jumps]
     
     # Considering case if jump_vol_array is empty
-    if len(jump_vol_array) == 0:
-        sig_j = 0
-    else:
-        sig_j = np.std(jump_vol_array, ddof=1)
+    sig_j = 0 if len(jump_vol_array) == 0 else np.std(jump_vol_array, ddof=1)
 
     # Computing Average jump frequency over given time
     lambda_ = len(jumps)/(1/time)
@@ -110,9 +123,21 @@ for i in range(len(stocks)):
     # Simulating prices using MERTON
     expected_price = simulate(current_price, mean, expected_volatility, lambda_, k, sig_j, time)
     
-    print(f"Invested amount: {investment}")
-    print(f"Current Stock price of {stock}: {current_price}")
-    print(f"Expected Stock price of {stock}: {expected_price}")
-    print(f"Expected return: {(investment/current_price)*expected_price}")
-    print(expected_volatility)
-    
+    # Appending data to data list
+    datalist.append([stock, investment, current_price, expected_price, (investment/current_price)*expected_price, ((expected_price-current_price)/current_price)*100])
+    print(f"{stock}: {expected_volatility}")
+
+# Some decoration
+print(" ")
+decor()
+print("CURRENT PORTFOLIO")
+decor()
+
+# Displaying table using tabulate
+display_data(datalist, headers)
+
+# For readability
+print("")
+
+# Displaying Summary table
+display_summary(datalist)
