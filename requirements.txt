@@ -1,0 +1,6 @@
+argparse
+yfinance
+numpy
+scipy
+tabulate
+pybind11
