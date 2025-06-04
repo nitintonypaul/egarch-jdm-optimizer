@@ -8,6 +8,7 @@ import numpy as np
 # Custom modules 
 from py_modules.data_handler import compute_elements, compute_mean
 from py_modules.data_display import display_data, display_summary
+from py_modules.mvo import optimize
 from build_modules.egarch import estimate
 from build_modules.merton import simulate
 
@@ -41,16 +42,23 @@ if len(stocks) != len(investments):
 
 # Introduction to the program
 decor()
-print("EGARCH & JDM BASED PORTFOLIO OPTIMIZER")
+print("EGARCH & JDM BASED PORTFOLIO OPTIMIZER (MVO)")
 decor()
 print(" ")
+print(" ")
+
+# Disclaimer
+decor()
+print("DISCLAIMER")
+decor()
+print("This program is for demonstration purposes only and should not \nbe used for financial or investment decisions. The creator \nis not responsible for any outcomes or losses resulting from \nits use.")
 print(" ")
 
 # Defining time in terms of trading years
 time = 1/252
 
 # Table headers and data list
-headers = ["STOCK","INVESTMENT","CURRENT PRICE", "EXPECTED PRICE", "EXPECTED RETURN", "GAIN/LOSS (%)"]
+headers = ["STOCK","INVESTMENT","CURRENT PRICE", "EXPECTED PRICE (1 DAY)", "EXPECTED RETURN", "GAIN/LOSS (%)"]
 datalist = []
 
 # Some decoration
@@ -137,7 +145,28 @@ decor()
 display_data(datalist, headers)
 
 # For readability
-print("")
+print(" ")
 
 # Displaying Summary table
 display_summary(datalist)
+
+# Obtaining optimized data list (MVO)
+datalist = optimize(datalist)
+
+# Some decoration
+print(" ")
+decor()
+print("OPTIMIZED PORTFOLIO")
+decor()
+
+# Displaying optimized portfolio
+display_data(datalist, headers)
+
+# For readability
+print(" ")
+
+# Displaying Summary table
+display_summary(datalist)
+
+#Demo Argument (20 stocks)
+#python main.py --stock AAPL --investment 5000 --stock TSLA --investment 3000 --stock GOOGL --investment 4000 --stock MSFT --investment 3500 --stock AMZN --investment 4500 --stock NVDA --investment 2500 --stock META --investment 2000 --stock JPM --investment 1500 --stock DIS --investment 1800 --stock NFLX --investment 2200 --stock BABA --investment 1700 --stock AMD --investment 1900 --stock ORCL --investment 2100 --stock INTC --investment 1600 --stock IBM --investment 1400 --stock PYPL --investment 2300 --stock BA --investment 2400 --stock T --investment 1300 --stock KO --investment 2600 --stock PEP --investment 2700
