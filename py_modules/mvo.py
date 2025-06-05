@@ -22,7 +22,7 @@ def optimize(data):
     corr = []
     for datum in data:
         stock = yf.Ticker(datum[0])
-        returns = stock.history(period="60d")["Close"]
+        returns = stock.history(period="61d")["Close"]
         log_returns = np.array(np.log(returns / returns.shift(1)).dropna())
         corr.append(log_returns)
 

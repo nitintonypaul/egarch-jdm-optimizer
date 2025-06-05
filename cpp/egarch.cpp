@@ -1,3 +1,6 @@
+//Using math defines to utilize PI
+#define _USE_MATH_DEFINES
+
 // Including modules
 #include <iostream>
 #include <cmath>
@@ -13,6 +16,8 @@ double estimate(int no_days, double volatility, const std::vector<double> &shock
 void optimize(const std::vector<double> &shockarray);
 void compute_gradient(const std::vector<double> &shockarray);
 double compute_volatility(int t, const std::vector<double> &shockarray);
+double backtrack_line_search(double dir[], const std::vector<double> &shockarray);
+bool armijo_condition(double alpha, double dir[], const std::vector<double> &shockarray);
 
 // Parameters
 // Order: Alpha, Beta, Omega, Gamma
@@ -22,47 +27,81 @@ double parameters[] = {0.1,0.9,-0.1,-0.1};
 double gradient[4] = {0, 0, 0, 0};
 
 // Initialising global variables
-double lambda = 1e-9;
+double lambda = 1;
+const double ARMIJO_C = 1e-4;
 int days;
 double vol;
 const double LOG_CLAMP = 700.0;
+const double NLL_Z_TERM_MAX = 1e9;
 
-double estimate( int no_days, double volatility, const std::vector<double> &shockarray) {
+// Core function
+double estimate(int no_days, double volatility, const std::vector<double> &shockarray) {
 
     // Assigning global variables
     days = no_days;
     vol = volatility;
+    
+    // Resetting parameters and step value before optimization
+    parameters[0] = 0.1;
+    parameters[1] = 0.9;
+    parameters[2] = -0.1;
+    parameters[3] = -0.1;
+    lambda = 1.0;
+    
+    // Zeroing out gradient completely
+    std::fill(gradient, gradient + 4, 0.0);
 
     // Calling the optimizing function to find parameters
     optimize(shockarray);
+    
+    // Assigning computed volatility
+    // Didn't have to assign, but makes it easier for debugging
+    double computed_volatility =  compute_volatility(days, shockarray);
 
-    // Returning computed volatility
-    return compute_volatility(days, shockarray);
+    // Debugging code
+    // std::cout << "VOLATILITY: " << k << std::endl;
+    return computed_volatility;
 }
 
 // Conjugate Gradient Optimization 
 void optimize(const std::vector<double> &shockarray) {
 
+    // Debugging code
+    // std::cout << "ALPHA: " << lambda << " PARAMETERS: " << parameters[0] << "," <<  parameters[1] << "," <<  parameters[2] << "," <<  parameters[3] << std::endl;
+
+    // First iteration is done manually
     // Computing initial gradient 
     compute_gradient(shockarray);
 
-    // Finding direction
-    double direction[4];
+    // Declaring direction
+    double direction[4] = {0,0,0,0};
     
-    // Loop to iterate through direction and assign
+    // Finding direction
+    // Direction is -gradient(f)
     for (int i = 0; i < 4; i++) {
         direction[i] = -gradient[i];
     }
 
-    // Optimizing parameters
+    // Computing lambda (Step value)
+    // Using backtrack line search
+    lambda = backtrack_line_search(direction, shockarray);
+
+    // Optimizing parameters using step value
+    // Optimization formula: P = P + (λ * D)
     for (int i = 0; i < 4; i++) {
         parameters[i] = parameters[i] + (lambda * direction[i]);
     }
 
-    // Optimization set to 1000 iterations as limit
+    // Debugging code
+    // std::cout << "ALPHA: " << lambda << " PARAMETERS: " << parameters[0] << "," <<  parameters[1] << "," <<  parameters[2] << "," <<  parameters[3] << std::endl;
+
+    // Rest of the optimization is done in a loop
+    // Stable limit of 1000 iterations
     for (int i = 0; i < 1000; i++) {
 
         // FLETCHER REEVES
+        // Fletcher Reeves involves in updating beta after each iteration with correspondence to
+        // the gradient of the current and previous function values
         // Declaring beta as the denominator product and computing
         double beta = 0;
         for (int j = 0; j < 4; j++) {
@@ -70,6 +109,7 @@ void optimize(const std::vector<double> &shockarray) {
         }
 
         // Declaring numerator product
+        // betaplus is a temporary variable named for numerator
         double betaplus = 0;
 
         // Computing next gradient
@@ -81,26 +121,56 @@ void optimize(const std::vector<double> &shockarray) {
         }
         
         // Computing beta_k (beta)
-        // Used for updating direction
+        // beta is used to update direction
         beta = betaplus / beta;
 
-        // Updating direction
+        // Updating direction using Fletcher Reeves
         for(int j = 0; j < 4; j++) {
             direction[j] = -gradient[j] + (beta * direction[j]);
         }
 
-        // Pre-checking beta to see if it's going off-rail
-        // In EGARCH, Beta must always be <= 1
-        if (parameters[1] + (lambda * direction[1]) > 1) {
+        // DOT PRODUCT DIAGONOSTIC
+        // When the dot product of the resulting direction and gradient is significant enough, it can lead to parameter value explosions
+        // To combat this phenomonen the direction is reset to simply as -gradient
+        // essentially nullifying the FLETCHER REEVES PROCESS
+        // "Math is math" doesn't really apply here... lol
+        // Computing dot product (Direction, Gradient)
+        double dot = 0;
+         for (int j = 0; j < 4; j++) {
+            dot += gradient[j] * direction[j];
+        }
+
+        // Checking if the dot product is significant
+        // if it is, it is reset normally
+        // This is a diagnostic fix and is not intended to reflect theoretical accuracy
+        if (dot >= -1e-12) { 
+            for (int j = 0; j < 4; j++) {
+                direction[j] = -gradient[j];
+            }
+        }
+
+        // Computing lambda (step value)
+        // Using backtrack line search
+        lambda = backtrack_line_search(direction, shockarray);
+
+        // Convergence condition
+        // If the step value is insignificant, then there is no significant change to the parameters
+        // Hence the loop is broken to retain efficiency
+        // Regardless the loop executes at least 10 iterations to prevent premature convergence
+        if (lambda < 1e-8 && i > 10) {
+            // Debugging code
+            //std::cout << "BREAKING SINCE STEP IS " << lambda << std::endl;
             break;
         }
 
-        // Updating parameters
+        // Optimizing parameters
         for (int j = 0; j < 4; j++) {
             parameters[j] = parameters[j] + (lambda * direction[j]);
         }
 
-        // Repeat until 1000. Can implement break-out conditions.
+        // Debugging code
+        //std::cout << "ALPHA: " << lambda << " PARAMETERS: " << parameters[0] << "," <<  parameters[1] << "," <<  parameters[2] << "," <<  parameters[3] << std::endl;
+        // Repeat until 1000. Or until convergence happens.
     }
 
 }
@@ -121,7 +191,8 @@ void compute_gradient(const std::vector<double> &shockarray) {
     for (int i = 1; i < days; i++) {
         
         // Caching constants
-        // Computing sigma and checking for near zero cases
+        // Computing SIGMA
+        // SIGMA is clamped to 1e-9 to prevent NaN values
         double sigma_t = compute_volatility(i, shockarray);
         double sigma_prev = compute_volatility(i-1, shockarray);
         if (std::abs(sigma_t) < 1e-9) sigma_t = 1e-9;
@@ -129,25 +200,32 @@ void compute_gradient(const std::vector<double> &shockarray) {
 
         // Computing Z_t
         double z_t = shockarray[i] / sigma_t;
-        double z_t_prev = shockarray[i-1] / sigma_prev;
+        double z_prev = shockarray[i-1] / sigma_prev;
 
-        // Other parameters
-        double M_t = -0.5 * ((parameters[0] * std::abs(z_t_prev)) + parameters[3] * (z_t_prev));
-        double PSI_multiple = parameters[1] + M_t;
-        double CT[] = {std::abs(z_t_prev), std::log(std::pow(sigma_prev,2)), 1, z_t_prev};
+        // Z values are clamped to ensure absence of step value explosion
+        // Changing the clamp values of Zs are not recommended since it leads to insigificant step values such as 2e-30
+        //z_t = std::max(-NLL_Z_TERM_MAX, std::min(z_t, NLL_Z_TERM_MAX));
+        //z_prev = std::max(-NLL_Z_TERM_MAX, std::min(z_prev, NLL_Z_TERM_MAX));
+
+
+        // C_T is the vector corresponding to each parameter
+        double CT[] = {std::abs(z_prev), std::log(std::pow(sigma_prev,2)), 1, z_prev};
 
         // Adding immediate derivative
+        // Immediate derivative is common for every parameter
         double alpha_der = 0.5 * (1 - std::pow(z_t,2));
         double beta_der = 0.5 * (1 - std::pow(z_t,2));
         double omega_der = 0.5 * (1 - std::pow(z_t,2));
         double gamma_der = 0.5 * (1 - std::pow(z_t,2));
 
         // Updating PSI with the previous value
+        // PSI is the 'parent' recursive variable
         for(int j = 0; j < 4; j++) {
-            PSI[j] = CT[j] + (PSI_multiple * PSI[j]);
+            PSI[j] = CT[j] + (parameters[1] * PSI[j]);
         }
 
         // Multiplying with parameter derivatives and adding to the gradient
+        // gradient is accessed globally
         gradient[0] += alpha_der * PSI[0];
         gradient[1] += beta_der * PSI[1];
         gradient[2] += omega_der * PSI[2];
@@ -167,21 +245,140 @@ double compute_volatility(int t, const std::vector<double> &shockarray) {
     // Computing volatility under current parameters
     for (int i = 1; i <= t; i++) {
 
-        // Ensuring sig is in range
+        // Clamping sig to 1e-9 to prevent NaN values
         if (std::abs(sig) < 1e-9) sig = 1e-9;
 
         // EGARCH equation to compute logarithmic volatility squared
         double logsigsq = parameters[2] + (parameters[1] * std::log(std::pow(sig, 2))) + (parameters[0] * std::abs(shockarray[i-1] / sig)) + (parameters[3] * (shockarray[i-1] / sig));
 
-        //Ensuring logsigsq stays in range
+        // Ensuring logsigsq stays in range
+        // Clamping logsigsq to global constant of (-700,700) depending upon it's magnitude
         logsigsq = std::max(-LOG_CLAMP, std::min(logsigsq, LOG_CLAMP));
 
         // Assigning volatility to setup for next iteration
+        // The previous sigma value is used in the next equation
+        // EGARCH equation is essentially a recurrence relation
         sig = std::sqrt(std::exp(logsigsq));
     }
 
-    // returning final volatility
+    // Returning final volatility computed under current parameters
     return sig;
+}
+
+// Function for backtrack line searching
+// Used to compute the step value required for each independent iteration
+// works under Armijo condition
+double backtrack_line_search(double dir[], const std::vector<double> &shockarray) {
+
+    // Declaring step value (ALPHA) and beta (step multilplier)
+    // Beta acts as a step value for the step value
+    double beta = 0.5;
+    double alpha = 1;
+
+    // While condition is false
+    while (!armijo_condition(alpha, dir, shockarray)) {
+
+        // ALPHA is multiplied with beta
+        // ALPHA is essentially halved every step
+        alpha *= beta;
+    }
+
+    // returning the computed step value
+    return alpha;
+}
+
+// Function to check whether Armijo conditions retains false
+// line search is to break when armijo condition is true
+// ARMIJO CONDITON: f(x + ALPHA.d) <= f(x) + c.ALPHA.T(grad(f(x))).d
+// Where ALPHA is the step value
+bool armijo_condition(double alpha, double dir[], const std::vector<double> &shockarray) {
+
+    // COMPUTING LHS 
+    // LHS = f(x + ALPHA.d)
+    // f -> Negative Log Likelihood function
+    
+    // Declaring sig (initial volatility)
+    double sig = vol;
+    double sigN = vol;
+
+    // Declaring total likelihood
+    // Which is the LHS in the Armijo Condition ( with modified parameters)
+    double LHS = 0;
+
+    // Declaring log likelihood and computing the same to reduce complexity
+    // this total_likelihood is used for RHS computation
+    // f(x)
+    double total_likelihood = 0;
+
+    // Computing volatility under current parameters
+    for (int i = 1; i < days; i++) {
+
+        // Clamping sig to 1e-9 to prevent NaN values
+        if (std::abs(sig) < 1e-9) sig = 1e-9;
+
+        // EGARCH equation to compute logarithmic volatility squared
+        // Modified with different parameters
+        // logsiqsqN is done with normal parameters to compute f(x) for RHS
+        double logsigsq = (parameters[2] + dir[2]*alpha) + ((parameters[1] + dir[1]*alpha) * std::log(std::pow(sig, 2))) + ((parameters[0] + dir[0]*alpha) * std::abs(shockarray[i-1] / sig)) + ((parameters[3] + dir[3]*alpha) * (shockarray[i-1] / sig));
+        double logsigsqN = parameters[2] + (parameters[1] * std::log(std::pow(sigN, 2))) + (parameters[0] * std::abs(shockarray[i-1] / sigN)) + (parameters[3] * (shockarray[i-1] / sigN));
+
+        // Ensuring logsigsq stays in range
+        // Clamping logsigsq to global constant of (-700,700) depending upon it's magnitude
+        logsigsq = std::max(-LOG_CLAMP, std::min(logsigsq, LOG_CLAMP));
+        logsigsqN = std::max(-LOG_CLAMP, std::min(logsigsqN, LOG_CLAMP));
+
+        // Assigning volatility to setup for next iteration
+        // The previous sigma value is used in the next equation
+        // EGARCH equation is essentially a recurrence relation
+        sig = std::sqrt(std::exp(logsigsq));
+        sigN = std::sqrt(std::exp(logsigsqN));
+
+        // Computing Z (LHS & RHS)
+        // It is done so to clamp values and to not let it go astronomically high or low
+        double Z_LHS = std::pow(shockarray[i] / sig, 2);
+        double Z_RHS = std::pow(shockarray[i] / sigN, 2);
+        //std::cout << shockarray[i] << std::endl;
+
+        // Capping both Zs to a constant
+        // Haven't reached the limit in testing but deploying just in case
+        // Constant is very high
+        if (Z_LHS > NLL_Z_TERM_MAX) Z_LHS = NLL_Z_TERM_MAX;
+        if (Z_RHS > NLL_Z_TERM_MAX) Z_RHS = NLL_Z_TERM_MAX; 
+
+        // Incrementing to negative log likelihood (LHS)
+        // Capped Z terms are used here
+        LHS += 0.5 * (std::log(2 * M_PI) + logsigsq + Z_LHS);
+        total_likelihood += 0.5 * (std::log(2 * M_PI) + logsigsqN + Z_RHS);
+    }
+
+    // COMPUTING RHS
+    // RHS = f(x) + c.ALPHA.T(gradient(f(x))).d
+    // f -> negative log likelihood function
+    double RHS = total_likelihood;
+    
+    // Defining product variable and a temporary sum variable
+    double product = ARMIJO_C * alpha;
+    double tempsum = 0;
+
+    // Computing gradient.direction
+    // Dot product of two vectors
+    // gradient is accessed globally
+    for (int i = 0; i < 4; i++) {
+        tempsum += gradient[i]*dir[i];
+    }
+
+    // Multiplying into product
+    product *= tempsum;
+
+    // Adding product to RHS
+    RHS += product;
+
+    // Returning the Armijo Condition status
+    if (LHS <= RHS) {
+        return true;
+    }
+    return false;
+
 }
 
 //Pybind11 declaration
@@ -189,15 +386,15 @@ PYBIND11_MODULE(egarch, m) {
     m.def("estimate", &estimate);
 }
 
-/*TEST OUTPUT*/
-/*
+/*TEST OUTPUT
+
 int main() {
 
-    // Stock Chosen for test: RELIANCE.NS
+    // Stock Chosen for test: TSLA
     
     int days = 180;
-    double vol = 0.01058767442405473;
-    const std::vector<double> &shock_array = {-0.0017527888369720385, -0.0007627691558581706, -0.007013042237308608, 0.019179353144027696, -0.0049905728007749875, -0.0009963113599895366, 0.0005153880712439762, -0.006159327405549098, 0.004114573728832392, 0.01086606680447724, 0.0048710334570512565, -0.0028122091635543675, 0.002936898514492704, 0.0025437689605181473, 0.018537044196617003, -0.033169572415035715, -0.00811955444816003, -0.04042387463346191, -0.014771476667475653, -0.011590974277875452, 0.019107670275681547, -0.01654492522338198, -0.0027159755647238235, 0.0006353710136417545, 0.00017961292864993137, -0.021113384555458033, 0.007319548166198156, 0.001603951030544575, 0.001987180163003538, 0.007126575852341338, -0.01919023490388163, -0.0037283151989873126, 0.0008219869896168964, -0.009089429934223996, 0.004753070239259238, 0.004095231483897186, 0.0027761198954648933, -0.008986826009036993, 0.004812397195667129, -0.027775017288777758, 0.002286054668192061, 0.015113501379654344, -0.015105656196376832, -0.01704565638036032, -0.008775011489717877, 0.0010870617087548379, -0.01770564213592713, 0.012212963714127261, -0.005548666479035645, -0.01539574093674042, -0.015264422091268085, 0.03395132143999171, 0.01679551271061655, 0.006607004474719088, -0.002061441735511909, -0.01760318615435357, 0.01656937363957487, 0.01290181706824997, 0.01062044451391635, -0.011033520776859578, 0.009828228453416996, -0.00810403689712347, -0.012713262581833537, -0.008114695274557835, -0.00531927986035268, -0.012172235910790714, 0.007717659677845936, -0.0037111208478030782, -0.018431074514401367, 0.006233554327408334, -0.01849037958906244, -0.020781496207419668, 0.013875711746308321, 0.0002379318093351625, -0.005213515262397053, 0.003562041386444998, -0.008642638797830556, 0.003785555139588479, 0.0046304670758547375, 0.016556936015068156, 0.00737104973862127, -0.026983097478358795, 0.018456320809004848, 0.019540573147985456, -0.008661070329308813, -0.010423983801591437, -0.0017822186429803204, -0.0010176970837927639, 0.010669039793967742, 0.011185588031991638, 0.0278225149941077, 0.0022473465193848484, -0.024751878119457567, 0.0025357322461881607, -0.01071760431522629, -0.013955295817739459, -0.013823765349094025, 0.00396936840698063, 0.0007605857224603021, 0.013974752989345, 0.009440413946139134, -0.0005254226829142093, -0.015027786297586347, 0.030926011469561338, -0.0055916291127598005, 0.002487402026378231, -0.011785384858131921, -0.01048585796962559, -0.0152399493060337, -0.015060580267698066, -0.0005001460041650552, 0.000815100272386559, 0.006134892983130252, 0.00027799441060869466, 0.001541346767297562, 0.0043812984238052214, -0.004071351080249935, -0.011265432839561164, -0.008854450013286079, 0.0024413027337566295, -0.005946021066830334, -0.024463430620579762, -0.008145056230799945, 0.01159189869726309, 0.028380952585070632, 0.03256375244287346, -0.009293452893244425, 0.00703089184988705, 0.007656371732097114, -0.007435705691237417, -0.007408766739300527, -0.00013011887917306446, 0.006547338617705618, 0.01735631768131491, 0.0055268996813062285, 0.01984378527010463, -0.012999632271286041, -0.009823298032958077, 0.003907046697290755, -0.0025583311519478606, -0.017933335021283518, -0.001288342610747984, -0.0020902957302698097, -0.036002557155654535, -0.0330389285822224, 0.013925226169932773, 0.00253088204606055, 0.027821604463363618, 0.017072090587104113, -0.0007753772301373848, 0.027877082466407237, 0.016212657306821386, -0.003454859181736085, 0.006662164870853314, 0.001099874819064145, -0.0010524488230168798, 0.051132432167001536, 0.022193294912523004, 0.003649290846780853, 0.010348629349113047, 0.007936986429393902, -0.007422784357731046, -0.010671816334703953, 0.0005808658646058641, -0.02153747998383025, 0.04202706353043925, -0.014715644388512826, 0.00599649675433729, 0.02057507921595747, 0.0013816475467545591, -0.010899224192407691, -0.011437612223744065, 0.0030936386986586636, -0.014080832648541012, 0.012139990612454622, 0.005461173103405996, -0.009020984357573527, -0.006620407039049737, 0.0033319429299430545, 0.0020539630866911575};
+    double vol = 0.03634437544828279;
+    const std::vector<double> &shock_array = {0.0012297495368080837, -0.00650973683920264, 0.06744448098003801, -0.027084893417118134, 0.044575234549721024, 0.01337065273083922, 0.007192007984448459, -0.014518962243894536, 0.020684086286020115, 0.000916904059319064, -0.01745939263063975, -0.039068967814471264, -0.03771320823262106, 0.034830568989869345, -0.041254716777913245, 0.011558870141369783, -0.017776056181240646, -0.013068770910621152, -0.09548867964710306, 0.0026597080911496635, -0.0016960925198351783, 0.004418546310355509, -0.005555112219541625, -0.004425678628740895, -0.011982848687334811, -0.0075942880634069215, -0.023583451496752103, 0.19462185069099375, 0.029326193277898618, -0.02869338608061214, -0.015020625929560247, -0.011185040757149548, -0.03391820717413026, -0.007053348203363615, -0.028534920390102938, 0.031236486238900563, 0.13402951946916286, 0.0250648716861814, 0.07513203474596467, 0.08224176327028512, -0.06699192892949678, 0.0017481261714555139, -0.0630132747101637, 0.026631832012274488, 0.05109920971511139, 0.017640811645799743, -0.015105466891194508, -0.010577313462489999, 0.0337693965702532, -0.04399602931270749, -0.004628895932059315, -0.019479161615941674, 0.032630798388913376, 0.030414611564264043, -0.019570853831010624, 0.01479014777521441, 0.02822109312124024, 0.04845594881852576, -0.0021017258828989935, 0.02476316972314454, 0.0540462143366207, -0.019392307918283117, 0.03888385863926566, 0.056035432813588415, 0.03215899741755826, -0.08998935603032143, -0.012603183294903772, -0.0388219116310389, 0.01883912278232164, 0.0674260255837058, -0.021352394827650573, -0.05431040238079732, -0.037134429629081867, -0.03661535089737744, -0.06630917624740101, 0.07538990478867226, -0.002080069819539433, -0.04501581211715883, -0.0020954405293401412, -0.004071706002516027, 0.017913054591346785, -0.020947779501058802, 0.07374909205016995, -0.03777111146959018, 0.02661611178322025, -0.009278954493688867, -0.024920183933157144, -0.01016338463739529, -0.01772972841348825, -0.027031791634221366, -0.0012010673142449357, -0.026406846276289128, 0.024762762717671406, 0.007169499868106744, -0.05665522784741188, 0.018423395317938473, -0.04001866414833721, -0.013797940129306678, -0.03808228368250438, -0.03414233598760291, -0.06904503086456125, 0.020525916642673545, 0.05256914805711156, -0.003846143628378932, -0.008438764146744299, 0.014485672870844696, -0.020797310880639457, -0.05153737405019097, -0.02532168597772474, -0.09119008256609133, -0.04400191834571329, -0.03447105091195446, 0.034809450473757886, -0.032409191623483345, -0.04887632901515568, 0.022055875914651905, -0.06127166019847188, -0.00653024118405064, -0.17111088145579012, 0.03367993906050802, 0.06962854627202306, -0.033888489653546086, 0.03434753687185593, -0.05263337183311424, -0.058400586412649155, 0.04219604958985143, -0.0018706817579388956, 0.0477895750349268, 0.10917033403209081, 0.030858322299713827, -0.06098904351795177, 0.0003601281859736301, -0.039269973990397236, -0.020362552049278032, 0.031691108739425794, 0.048331479831251356, -0.05986686313639594, -0.11360086629378592, -0.02954392268052511, -0.05380087178011993, 0.20092543922338743, -0.0790871693562535, -0.003921766723283929, -0.0034065843453072817, 0.0033850687872823467, -0.05425588368221071, -0.0043106387637591, -0.06274590803614198, 0.041429241266716946, 0.04870680638153779, 0.030813566766049894, 0.089953353202046, -0.00030675046671064035, 0.017719232326954937, -0.03794737440846216, -0.009394455180293842, 0.02000350047515987, -0.02806098794919671, -0.02123988149028043, -0.0004105245839973906, 0.027094632659224276, 0.04254305379187294, 0.06171489040858284, 0.044539779738598045, 0.0363667808836973, -0.01764208677682675, 0.01710535116315947, -0.026367332530845767, 0.0014792955053417496, -0.03068788165663621, 0.015439111696818088, -0.008562394467716845, 0.06353211380376568, -0.02020932578848646, 0.0007126083477966144, -0.03753115611158822, -0.014506232427285493, 0.0010348050058056066, -0.03970581887634815, -0.09276814903795098};
 
     std::cout << estimate(days, vol, shock_array) << std::endl;
 

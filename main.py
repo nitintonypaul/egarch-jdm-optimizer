@@ -8,9 +8,9 @@ import numpy as np
 # Custom modules 
 from py_modules.data_handler import compute_elements, compute_mean
 from py_modules.data_display import display_data, display_summary
-from py_modules.mvo import optimize
-from build_modules.egarch import estimate
-from build_modules.merton import simulate
+from py_modules.mvo import optimize    # Mean Variance Optimization
+from build_modules.egarch import estimate    # EGARCH
+from build_modules.merton import simulate    # Merton Jump Diffusion Model
 
 # Decorative function
 def decor():
@@ -63,7 +63,7 @@ datalist = []
 
 # Some decoration
 decor()
-print("EGARCH VOLATILITY ESTIMATES")
+print("EGARCH VOLATILITY ESTIMATES (ANNUALIZED)")
 decor()
 
 # For each stock in stocks
@@ -100,6 +100,9 @@ for i in range(len(stocks)):
     # Computing expected volatility using EGARCH
     expected_volatility = estimate(len(shock_array),vol,shock_array)
 
+    #print(f"Debug - {stock}: vol={vol:.8f}, expected_vol={expected_volatility:.8f}")
+    #print(f"Debug - {stock}: shock_array length={len(shock_array)}")
+
     # Computing threshold for jumps
     threshold = 3 * jump_returns.std()
 
@@ -109,14 +112,14 @@ for i in range(len(stocks)):
 
     # Obtaining average jump (Logarithmic)
     ksum = 0
-    for i in jumps:
-        ksum += math.log(1+i)
+    for j in jumps:
+        ksum += math.log(1+j)
     
     # Considering case if jumps array is empty
     k = 0 if len(jumps) == 0 else ksum/len(jumps)
 
     # Computing jump volatility
-    jump_vol_array = [math.log(1+i) for i in jumps]
+    jump_vol_array = [math.log(1+k) for k in jumps]
     
     # Considering case if jump_vol_array is empty
     sig_j = 0 if len(jump_vol_array) == 0 else np.std(jump_vol_array, ddof=1)
@@ -168,5 +171,5 @@ print(" ")
 # Displaying Summary table
 display_summary(datalist)
 
-#Demo Argument (20 stocks)
-#python main.py --stock AAPL --investment 5000 --stock TSLA --investment 3000 --stock GOOGL --investment 4000 --stock MSFT --investment 3500 --stock AMZN --investment 4500 --stock NVDA --investment 2500 --stock META --investment 2000 --stock JPM --investment 1500 --stock DIS --investment 1800 --stock NFLX --investment 2200 --stock BABA --investment 1700 --stock AMD --investment 1900 --stock ORCL --investment 2100 --stock INTC --investment 1600 --stock IBM --investment 1400 --stock PYPL --investment 2300 --stock BA --investment 2400 --stock T --investment 1300 --stock KO --investment 2600 --stock PEP --investment 2700
+#Demo Argument (10 stocks)
+#python main.py --stock AAPL --investment 5000 --stock TSLA --investment 3000 --stock GOOGL --investment 4000 --stock MSFT --investment 3500 --stock AMZN --investment 4500 --stock NVDA --investment 2500 --stock META --investment 2000 --stock JPM --investment 1500 --stock DIS --investment 1800 --stock NFLX --investment 2200
