@@ -137,3 +137,82 @@ This streamlined approach directly implements the closed-form update for each pa
 
 These simulated terminal prices feed into portfolio valuation, allowing for more accurate risk assessment by capturing both continuous volatility and discrete jumps. The sample average estimates the expected terminal price under jump diffusion. These simulated prices then feed into portfolio valuation and subsequent optimization.
 
+---
+
+## 6. Build Instructions
+
+Follow these steps to set up and run the project on Windows, macOS, or Linux.
+
+### 1. Clone or Download
+
+1. **Clone the repository**  
+   ```bash
+   git clone https://github.com/nitintonypaul/egarch-jdm-optimizer.git
+   ```
+2. **Or download ZIP**
+
+- Click “Code” → “Download ZIP” on GitHub.
+- Extract the ZIP archive to a folder of your choice.
+
+3. **Change to the project directory**
+
+```bash
+cd egarch-jdm-optimizer
+```
+
+### 2. Install Dependencies
+The project requires Python packages listed in `requirements.txt`. Install them with:
+
+```bash
+pip install -r requirements.txt
+```
+
+Make sure you’re using a compatible Python version (e.g., `Python 3.8+`).
+
+### 3. Windows: Run Directly
+On Windows, you can run the main script without building extensions manually.
+
+
+**Run `main.py`**
+
+```bash
+python main.py --stock AAPL --investment 10000 # Example
+```
+
+Add any other supported arguments as needed.
+
+### 4. macOS/Linux: Build & Run
+On macOS or Linux, you need to compile the C++ extension before running.
+
+
+**Build the extension**
+
+```bash
+python setup.py build_ext --build-lib build_modules
+```
+
+This command compiles the C++ modules (egarch and merton) into the `build_modules` folder.
+
+
+**Run `main.py`**
+
+```bash
+python main.py --stock AAPL --investment 10000
+```
+
+### 5. Troubleshooting
+
+If you encounter build errors on macOS/Linux, ensure you have a **C++ compiler** installed (e.g., **gcc** or **clang**).
+
+On Windows, make sure you have the appropriate **Visual C++ build tools** if you ever need to rebuild extensions.
+
+---
+
+## 7. License
+
+This project is licensed under the **Apache License 2.0**.  
+You are free to use, modify, and distribute the code, provided that you include proper attribution and retain the original license.
+
+> See [LICENSE](LICENSE) for full details.
+
+---
