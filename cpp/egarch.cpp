@@ -27,28 +27,34 @@ double parameters[] = {0.1,0.9,-0.1,-0.1};
 double gradient[4] = {0, 0, 0, 0};
 
 // Initialising global variables
+// Declared variables must be reset before every execution
 double lambda = 1;
-const double ARMIJO_C = 1e-4;
 int days;
 double vol;
+
+// Constants
+const double ARMIJO_C = 1e-4;
 const double LOG_CLAMP = 700.0;
 const double NLL_Z_TERM_MAX = 1e9;
 
 // Core function
+// This the function which is called in Python
 double estimate(int no_days, double volatility, const std::vector<double> &shockarray) {
 
     // Assigning global variables
     days = no_days;
     vol = volatility;
     
-    // Resetting parameters and step value before optimization
+    // Resetting parameters explicitly
     parameters[0] = 0.1;
     parameters[1] = 0.9;
     parameters[2] = -0.1;
     parameters[3] = -0.1;
+
+    // Resetting step value
     lambda = 1.0;
     
-    // Zeroing out gradient completely
+    // Zeroing out gradient
     std::fill(gradient, gradient + 4, 0.0);
 
     // Calling the optimizing function to find parameters
@@ -202,16 +208,18 @@ void compute_gradient(const std::vector<double> &shockarray) {
         double z_t = shockarray[i] / sigma_t;
         double z_prev = shockarray[i-1] / sigma_prev;
 
-        // Z values are clamped to ensure absence of step value explosion
-        // Changing the clamp values of Zs are not recommended since it leads to insigificant step values such as 2e-30
+        // This section was done to clamp values of Z, but was later deemed unnecessary
+        // But I'll still leave it like that in case to revert for breaking changes
+        // Z values are clamped in the Armijo function, which has not hit the limit during testing
         //z_t = std::max(-NLL_Z_TERM_MAX, std::min(z_t, NLL_Z_TERM_MAX));
         //z_prev = std::max(-NLL_Z_TERM_MAX, std::min(z_prev, NLL_Z_TERM_MAX));
 
 
         // C_T is the vector corresponding to each parameter
+        // Order: Alpha, Beta, Omega, Gamma
         double CT[] = {std::abs(z_prev), std::log(std::pow(sigma_prev,2)), 1, z_prev};
 
-        // Adding immediate derivative
+        // Assigning derivative to immediate derivative
         // Immediate derivative is common for every parameter
         double alpha_der = 0.5 * (1 - std::pow(z_t,2));
         double beta_der = 0.5 * (1 - std::pow(z_t,2));
@@ -219,7 +227,7 @@ void compute_gradient(const std::vector<double> &shockarray) {
         double gamma_der = 0.5 * (1 - std::pow(z_t,2));
 
         // Updating PSI with the previous value
-        // PSI is the 'parent' recursive variable
+        // PSI is the recursive variable
         for(int j = 0; j < 4; j++) {
             PSI[j] = CT[j] + (parameters[1] * PSI[j]);
         }
@@ -284,6 +292,7 @@ double backtrack_line_search(double dir[], const std::vector<double> &shockarray
     }
 
     // returning the computed step value
+    // referenced as lambda outside this function
     return alpha;
 }
 
@@ -387,7 +396,6 @@ PYBIND11_MODULE(egarch, m) {
 }
 
 /*TEST OUTPUT
-
 int main() {
 
     // Stock Chosen for test: TSLA

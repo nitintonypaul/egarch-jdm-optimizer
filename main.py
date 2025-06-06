@@ -119,10 +119,11 @@ for i in range(len(stocks)):
     k = 0 if len(jumps) == 0 else ksum/len(jumps)
 
     # Computing jump volatility
-    jump_vol_array = [math.log(1+k) for k in jumps]
+    jump_vol_array = [math.log(1+j) for j in jumps]
     
-    # Considering case if jump_vol_array is empty
-    sig_j = 0 if len(jump_vol_array) == 0 else np.std(jump_vol_array, ddof=1)
+    # Number of jumps are taken as 0 when array length is less than 2
+    # Standard deviation of the jumparray is not possible for certain stocks
+    sig_j = 0 if len(jump_vol_array) < 2 else np.std(jump_vol_array, ddof=1)
 
     # Computing Average jump frequency over given time
     lambda_ = len(jumps)/(1/time)
@@ -155,6 +156,15 @@ display_summary(datalist)
 
 # Obtaining optimized data list (MVO)
 datalist = optimize(datalist)
+
+# Checking if datalist is None
+# None means the portfolio cannot be optimized since all investments result in losses
+# The message is displayed and the program is exited
+if datalist == None:
+    decor()
+    print("PORTFOLIO CANNOT BE OPTIMIZED. ALL INVESTMENTS RESULT IN LOSSES")
+    decor()
+    sys.exit(0)
 
 # Some decoration
 print(" ")

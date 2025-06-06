@@ -13,10 +13,13 @@ def optimize(data):
     # Computing total investment
     total_investment = sum([x[1] for x in data])
 
-    # Removing Investments with losses
-    for i in data:  
-        if i[5] < 0:
-            del data[data.index(i)]
+    # Removing investment with losses
+    data = [x for x in data if x[5] > 0]
+
+    # Checking if data length is 0
+    # I.E no investments are present which returns a profit
+    if len(data) == 0:
+        return None
 
     # Computing Correlation Matrix
     corr = []
