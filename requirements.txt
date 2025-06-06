@@ -4,3 +4,4 @@ numpy
 scipy
 tabulate
 pybind11
+setuptools
