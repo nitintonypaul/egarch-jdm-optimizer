@@ -92,11 +92,11 @@ $$NLL(\theta) = \sum_{t=1}^T \left[ \frac{1}{2} \ln(2\pi) + \frac{1}{2} \ln(\sig
 The term $\left(\frac{\epsilon_t}{\sigma_t}\right)^2$ is equivalent to $Z_t^2$.
 The `armijo_condition` function in the C++ code calculates this Negative Log-Likelihood, where terms like `0.5 * (std::log(2 * M_PI) + logsigsq + Z_LHS)` directly correspond to the individual components of the NLL sum for each time step. The objective of MLE is to find the parameter values that minimize this NLL function, thereby maximizing the probability of observing the given data.
 
-## 4. Conjugate Gradient Optimization
+### 4. Conjugate Gradient Optimization
 
 The estimation of EGARCH parameters through MLE requires a numerical optimization algorithm. This implementation utilizes the **Conjugate Gradient (CG) method**, specifically employing the **Fletcher-Reeves** formula, complemented by a **Backtracking Line Search** and the **Armijo Condition** to efficiently determine optimal step sizes.
 
-### Conjugate Gradient Method
+#### Conjugate Gradient Method
 
 The Conjugate Gradient method is an iterative optimization algorithm used to minimize functions of multiple variables. It is particularly well-suited for problems where direct calculation of the inverse Hessian matrix (as required by Newton's method) is computationally prohibitive.
 
@@ -106,7 +106,7 @@ The parameter update rule at each iteration $k$ is:
 $$\theta_{k+1} = \theta_k + \alpha_k d_k$$
 where $\theta_k$ is the parameter vector, $\alpha_k$ is the optimal step size, and $d_k$ is the search direction.
 
-### Fletcher-Reeves Formula
+#### Fletcher-Reeves Formula
 
 The search direction $d_k$ in Conjugate Gradient methods is typically a combination of the negative gradient at the current point and the previous search direction. The **Fletcher-Reeves** formula is a widely used method for calculating the $\beta_k$ coefficient, which determines this combination:
 
@@ -136,6 +136,59 @@ beta = beta_numerator / beta_denominator; // Computes beta_k
 for(int j = 0; j < 4; j++) {
     direction[j] = -gradient[j] + (beta * direction[j]);
 }
+```
+
+A **"DOT PRODUCT DIAGONOSTIC"** is also included in the `optimize` function. This is a practical heuristic: if the dot product of the current gradient and the computed direction becomes too large (`dot >= -1e-12`), it can indicate numerical instability or that the search direction is no longer a sufficient descent direction. In such cases, the search direction is reset to the simpler steepest descent direction (`-gradient[j]`) to ensure robust optimization.
+
+#### Backtracking Line Search
+
+Once a search direction $d_k$ is determined, finding an appropriate step size $\alpha_k$ (referred to as `lambda` in the code) along this direction is critical. The **Backtracking Line Search** algorithm is used for this purpose. It starts with an initial step size (e.g., $\alpha=1$) and repeatedly shrinks it by a fixed factor (e.g., `beta = 0.5`) until the Armijo condition is satisfied.
+
+The `backtrack_line_search` function continuously reduces `alpha` until the `armijo_condition` returns `true`:
+
+```cpp
+double backtrack_line_search(double dir[], const std::vector<double> &shockarray) {
+    double beta = 0.5; // Step multiplier (shrinks alpha by half)
+    double alpha = 1;  // Initial step value
+
+    while (!armijo_condition(alpha, dir, shockarray)) {
+        alpha *= beta; // Decrease alpha
+    }
+    return alpha;
+}
+```
+
+#### Armijo Condition
+
+The **Armijo condition** is a fundamental criterion in line search algorithms that ensures the chosen step size $\alpha$ leads to a "sufficient decrease" in the objective function. This prevents oscillations or very slow convergence.
+
+The condition states:
+$$f(\theta + \alpha d) \le f(\theta) + c \alpha \nabla f(\theta)^T d$$
+
+Where:
+* $f(\theta)$: The objective function (Negative Log-Likelihood).
+* $d$: The search direction.
+* $\alpha$: The step size.
+* $c$: A small constant between 0 and 1 (typically $10^{-4}$), defined as `ARMIJO_C` in the code.
+
+The `armijo_condition` function directly implements this inequality:
+
+```cpp
+// Calculate LHS: f(x + ALPHA.d)
+double LHS = /* computed NLL with modified parameters */;
+
+// Calculate RHS: f(x) + c.ALPHA.T(grad(f(x))).d
+double total_likelihood = /* computed NLL with current parameters */;
+double RHS = total_likelihood;
+double product = ARMIJO_C * alpha;
+double tempsum = 0;
+for (int i = 0; i < 4; i++) {
+    tempsum += gradient[i]*dir[i]; // Dot product: gradient(f(x))^T * d
+}
+product *= tempsum;
+RHS += product;
+
+return (LHS <= RHS); // Returns true if Armijo condition is met
 ```
 
 ---
