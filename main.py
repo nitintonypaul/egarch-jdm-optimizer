@@ -137,7 +137,7 @@ for i in range(len(stocks)):
     
     # Appending data to data list
     datalist.append([stock, investment, current_price, expected_price, (investment/current_price)*expected_price, ((expected_price-current_price)/current_price)*100])
-    print(f"{stock}: {expected_volatility}")
+    print(f"{stock}: {expected_volatility:.6f}")
 
 # Some decoration
 print(" ")
