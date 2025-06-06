@@ -236,7 +236,7 @@ Here's the step-by-step process for each simulation:
     * The total impact of all jumps for this path is then summed: $J_{sum} = \sum_{j=1}^{N} \ln(1+J_j)$.
 
 2.  **Simulate Brownian Motion:**
-    * A random variate $Z_i$ is drawn from a standard normal distribution ($Z_i \sim \mathcal{N}(0,1)$).
+    * A random variate $Z_i$ is drawn from a standard normal distribution ($$Z_i \sim \mathcal{N}(0,1)$$).
     * The Brownian increment is then calculated as $W_t = \sqrt{t} Z_i$.
 
 3.  **Compute Terminal Price:**
