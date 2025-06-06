@@ -294,6 +294,65 @@ These simulated terminal prices feed into portfolio valuation, allowing for more
 
 ---
 
+## 5. Mean Variance Optimization
+
+The core of this optimization lies in **Modern Portfolio Theory (MPT)**, pioneered by Harry Markowitz. MPT posits that investors are rational and seek to maximize return for a given risk level, or minimize risk for a given return level. This trade-off is central to MVO.
+
+The problem is framed as minimizing a **Mean-Variance Utility Function**, which quantifies an investor's preference for return versus their aversion to risk. The objective function to be minimized is:
+
+$$f(w) = \frac{1}{2} w^T \Sigma w - \lambda w^T \mu$$
+
+This function represents the investor's utility, where:
+* $w$: A column vector of **portfolio weights**, where each element $w_i$ denotes the proportion of total investment allocated to asset $i$.
+* $\Sigma$: The **covariance matrix** of asset returns. This symmetric matrix quantifies the pairwise relationships between the returns of different assets, where diagonal elements are variances and off-diagonal elements are covariances. It is a critical measure of **portfolio risk**.
+* $\mu$: A column vector of **expected returns** for each asset. These are the anticipated average returns of the individual assets in the portfolio.
+* $\lambda$: The **risk aversion factor** (a scalar, denoted as `risk_aversion` in the code). This parameter governs the investor's preference for return over risk. A higher positive $\lambda$ indicates greater aversion to risk, leading the optimizer to favor portfolios with lower variance.
+
+The first term, $\frac{1}{2} w^T \Sigma w$, represents the **portfolio variance**, which is the mathematical measure of portfolio risk. The second term, $\lambda w^T \mu$, represents the **risk-adjusted expected portfolio return**. By minimizing this combined objective, the algorithm finds a set of weights that optimally balances these two components based on the specified risk aversion.
+
+The `risk_return` function in the code directly translates this mathematical objective:
+
+```python
+def risk_return(w, cov, lam, mu):
+    return (0.5 * np.dot(np.dot(w.T,cov), w)) - (lam * np.dot(w, mu.T))
+```
+
+### 1. Optimization Process and Constraints
+
+The `optimize` function employs a numerical optimization solver to find the optimal portfolio weights. The process involves several mathematical and practical steps:
+
+1.  **Data Pre-processing and Filtering:** Initial investment data is filtered to include only assets that show a positive gain/loss percentage. This is a practical heuristic to focus optimization on potentially profitable ventures.
+2.  **Estimation of Inputs ($\Sigma$, $\mu$):**
+    * **Historical Log Returns:** Daily logarithmic returns are calculated from historical closing prices for each asset using `yfinance`. Log returns are preferred in financial modeling for their additive properties and more consistent statistical behavior.
+    * **Covariance Matrix ($\Sigma$):** The covariance matrix is then computed from these historical log returns. This symmetric matrix quantifies the pairwise relationships between the returns of different assets, where diagonal elements are variances and off-diagonal elements are covariances. It is a critical measure of **portfolio risk**.
+    * **Expected Returns ($\mu$):** Expected returns for individual assets are calculated as the percentage change from `current price` to `expected price`. This serves as the $\mu$ vector for the optimization problem.
+3.  **Numerical Minimization:** The `scipy.optimize.minimize` function is used to solve the constrained minimization problem.
+    * **Solver:** The 'SLSQP' (Sequential Least SQuares Programming) method is chosen. SLSQP is an iterative algorithm designed for non-linear optimization problems with both equality and inequality constraints. It approximates the Hessian of the Lagrangian function using a quasi-Newton method and solves a sequence of quadratic programming subproblems.
+    * **Bounds:** Individual asset weights $w_i$ are constrained to be between $0$ and $1$ ($0 \le w_i \le 1$). This imposes a "long-only" portfolio constraint (no short-selling) and prevents leverage, ensuring that all capital is allocated to existing assets and that no asset holds a negative proportion of the portfolio.
+    * **Equality Constraint:** A fundamental equality constraint is applied: $\sum_{i=1}^N w_i = 1$. This ensures that the sum of all portfolio weights equals exactly one, meaning 100% of the available capital is allocated across the selected assets.
+4.  **Weight Post-processing:** After optimization, very small positive weights (below `1e-7`) are effectively rounded down to zero. This is a numerical hygiene step to eliminate negligible allocations that might arise from floating-point inaccuracies, making the resulting portfolio more practical. The remaining non-zero weights are then re-normalized to ensure their sum still equals one, proportionally redistributing the capital from the dropped assets.
+
+---
+
+### 2. Input & Output Data
+
+#### Input Data (`data` parameter)
+
+The `optimize` function expects a `list` of `list`s, where each inner list represents a stock with specific attributes in a defined order:
+
+* `[0]`: **Stock Ticker Symbol** (e.g., "AAPL", "MSFT") - `str`
+* `[1]`: **Initial Investment Amount** in this stock (used to derive `total_investment`) - `float`
+* `[2]`: **Current Price** of the stock - `float`
+* `[3]`: **Expected Price** of the stock - `float`
+* `[4]`: **Expected Return** (initial, before optimization) - `float` (Note: the `expected_returns` vector for the objective function is calculated from `[2]` and `[3]` internally)
+* `[5]`: **Gain/Loss Percentage** (used for initial filtering of assets) - `float`
+
+#### Output Data
+
+The function returns a filtered `list` of `list`s which is displayed using the `tabulate` module. This output list is structured identically to the input `data`, but with one crucial modification: the `Initial Investment Amount` (`[1]`) for each stock is updated to reflect the **optimized allocation** derived from the MVO. Stocks that receive zero allocation after optimization or were initially filtered out due to losses are excluded from the returned list. If, after filtering, no profitable investments remain for optimization, the function returns `None`.
+
+---
+
 ## 6. Build Instructions
 
 Follow these steps to set up and run the project on Windows, macOS, or Linux.
