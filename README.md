@@ -37,6 +37,108 @@ Users are explicitly advised **not to use this project for any real-world financ
 The author disclaims all liability for any financial losses or damages that may arise directly or indirectly from the use or reliance on this project or its outputs. Users assume full responsibility for any actions taken based on the information or results provided.
 
 ---
+## 3. EGARCH
+
+### 1. What is EGARCH?
+
+The **Exponential Generalized Autoregressive Conditional Heteroskedasticity (EGARCH)** model is a statistical model primarily used in financial econometrics to analyze and forecast the volatility of financial time series, such as asset returns. It extends the traditional [GARCH](https://github.com/nitintonypaul/garch) model by addressing certain limitations, notably its ability to capture the **asymmetric response of volatility to positive and negative shocks**.
+
+Unlike symmetric GARCH models, where only the magnitude of past innovations affects current volatility, EGARCH explicitly accounts for the **leverage effect**. This means that negative shocks (e.g., a stock price drop) can have a greater impact on future volatility than positive shocks of the same magnitude (e.g., a stock price increase). This asymmetry is a critical feature in financial markets, as bad news often leads to a more significant increase in volatility than good news.
+
+A key advantage of the EGARCH model is that it models the **logarithm of the conditional variance**. This ensures that the forecasted variance is always positive, even if some of the model parameters are negative, removing the need for non-negativity constraints typically required in standard GARCH models.
+
+### 2. Mathematics of EGARCH
+
+The EGARCH(p, q) model for the logarithm of the conditional variance, $\ln(\sigma_t^2)$, is commonly expressed as:
+
+$$\ln(\sigma_t^2) = \omega + \sum_{i=1}^p \alpha_i \left( |Z_{t-i}| - E[|Z_{t-i}|] \right) + \sum_{i=1}^p \gamma_i Z_{t-i} + \sum_{j=1}^q \beta_j \ln(\sigma_{t-j}^2)$$
+
+Where:
+* $\sigma_t^2$: The conditional variance at time $t$.
+* $\omega$: A constant term, representing the baseline log-volatility.
+* $Z_t = \frac{\epsilon_t}{\sigma_t}$: The standardized residual, with $\epsilon_t$ being the innovation (shock) at time $t$. $Z_t$ is typically assumed to follow a standard normal distribution ($$Z_t \sim N(0,1)$$).
+* $\alpha_i$: Captures the symmetric effect of past standardized residuals on current volatility.
+* $\gamma_i$: Represents the **asymmetric "leverage effect."** If $\gamma_i < 0$, it signifies that negative shocks increase volatility more than positive shocks of the same magnitude.
+* $\beta_j$: Measures the **persistence of volatility**, indicating how slowly volatility reverts to its long-term mean after a shock.
+
+Our implementation focuses on an **EGARCH(1,1)** model, which simplifies the equation to:
+
+$$\ln(\sigma_t^2) = \omega + \beta_1 \ln(\sigma_{t-1}^2) + \alpha_1 |Z_{t-1}| + \gamma_1 Z_{t-1}$$
+
+In the provided C++ code, the `compute_volatility` function directly implements this recurrence relation for $\ln(\sigma_t^2)$:
+
+```cpp
+double logsigsq = parameters[2] + (parameters[1] * std::log(std::pow(sig, 2))) + (parameters[0] * std::abs(shockarray[i-1] / sig)) + (parameters[3] * (shockarray[i-1] / sig));
+// The 'parameters' array maps as follows:
+// parameters[0] = alpha
+// parameters[1] = beta
+// parameters[2] = omega
+// parameters[3] = gamma
+sig = std::sqrt(std::exp(logsigsq)); // Converts log-variance back to standard deviation
+```
+
+### 3. Maximum Likelihood Estimation (MLE)
+
+To estimate the parameters ($\omega, \alpha, \gamma, \beta$) of the EGARCH model, **Maximum Likelihood Estimation (MLE)** is the standard approach. Assuming that the standardized residuals $Z_t$ are independently and identically distributed (i.i.d.) and follow a standard normal distribution ($$Z_t \sim N(0,1)$$), the log-likelihood function for a series of $T$ observations is given by:
+
+$$L(\theta) = \sum_{t=1}^T \left[ -\frac{1}{2} \ln(2\pi) - \frac{1}{2} \ln(\sigma_t^2) - \frac{1}{2} \frac{\epsilon_t^2}{\sigma_t^2} \right]$$
+
+Where $\theta = (\alpha, \beta, \omega, \gamma)$ is the vector of parameters to be estimated, and $\epsilon_t$ are the observed shocks (returns).
+
+In numerical optimization, it's common to minimize the **Negative Log-Likelihood (NLL)** function, which is simply $-L(\theta)$:
+
+$$NLL(\theta) = \sum_{t=1}^T \left[ \frac{1}{2} \ln(2\pi) + \frac{1}{2} \ln(\sigma_t^2) + \frac{1}{2} \left(\frac{\epsilon_t}{\sigma_t}\right)^2 \right]$$
+
+The term $\left(\frac{\epsilon_t}{\sigma_t}\right)^2$ is equivalent to $Z_t^2$.
+The `armijo_condition` function in the C++ code calculates this Negative Log-Likelihood, where terms like `0.5 * (std::log(2 * M_PI) + logsigsq + Z_LHS)` directly correspond to the individual components of the NLL sum for each time step. The objective of MLE is to find the parameter values that minimize this NLL function, thereby maximizing the probability of observing the given data.
+
+## 4. Conjugate Gradient Optimization
+
+The estimation of EGARCH parameters through MLE requires a numerical optimization algorithm. This implementation utilizes the **Conjugate Gradient (CG) method**, specifically employing the **Fletcher-Reeves** formula, complemented by a **Backtracking Line Search** and the **Armijo Condition** to efficiently determine optimal step sizes.
+
+### Conjugate Gradient Method
+
+The Conjugate Gradient method is an iterative optimization algorithm used to minimize functions of multiple variables. It is particularly well-suited for problems where direct calculation of the inverse Hessian matrix (as required by Newton's method) is computationally prohibitive.
+
+The core principle of CG is to generate a sequence of search directions that are "conjugate" with respect to the Hessian matrix of the objective function. This ensures that each new search direction effectively makes progress towards the minimum without undoing the progress made in previous steps, leading to faster convergence than simple gradient descent.
+
+The parameter update rule at each iteration $k$ is:
+$$\theta_{k+1} = \theta_k + \alpha_k d_k$$
+where $\theta_k$ is the parameter vector, $\alpha_k$ is the optimal step size, and $d_k$ is the search direction.
+
+### Fletcher-Reeves Formula
+
+The search direction $d_k$ in Conjugate Gradient methods is typically a combination of the negative gradient at the current point and the previous search direction. The **Fletcher-Reeves** formula is a widely used method for calculating the $\beta_k$ coefficient, which determines this combination:
+
+$$d_{k+1} = -\nabla f(\theta_{k+1}) + \beta_k d_k$$
+$$\beta_k^{FR} = \frac{||\nabla f(\theta_{k+1})||^2}{||\nabla f(\theta_k)||^2} = \frac{\nabla f(\theta_{k+1})^T \nabla f(\theta_{k+1})}{\nabla f(\theta_k)^T \nabla f(\theta_k)}$$
+
+Our `optimize` function implements this calculation:
+
+```cpp
+// Calculation of the denominator (||gradient_k||^2)
+double beta_denominator = 0;
+for (int j = 0; j < 4; j++) {
+    beta_denominator += gradient[j] * gradient[j];
+}
+
+// ... Call to compute_gradient() to get gradient_{k+1} ...
+
+// Calculation of the numerator (||gradient_{k+1}||^2)
+double beta_numerator = 0;
+for (int j = 0; j < 4; j++) {
+    beta_numerator += gradient[j] * gradient[j];
+}
+
+beta = beta_numerator / beta_denominator; // Computes beta_k
+
+// Update direction using Fletcher-Reeves formula
+for(int j = 0; j < 4; j++) {
+    direction[j] = -gradient[j] + (beta * direction[j]);
+}
+```
+
+---
 
 ## 4. Merton Jump Diffusion Model
 
