@@ -8,8 +8,11 @@ def risk_return(w, cov, lam, mu):
     return (0.5 * np.dot(np.dot(w.T,cov), w)) - (lam * np.dot(w, mu.T))
 
 # Optimization (MVO)
-def optimize(data):
+def optimize(data, risk_aversion):
 
+    # Risk Aversion by default is 0.35 since the period of duration is 1 day
+    # Risk aversion can be changed from default by argument when running main.py
+    
     # Computing total investment
     total_investment = sum([x[1] for x in data])
 
@@ -31,9 +34,6 @@ def optimize(data):
 
     # Computing expected_returns and declaring  risk aversion factor
     expected_returns = [(item[3]-item[2])/item[2] for item in data]
-    
-    # An extremely low risk aversion is taken since the prediction is only a single day ahead
-    risk_aversion = 0.3
 
     # Computing covariance matrix
     corr = np.vstack(corr)

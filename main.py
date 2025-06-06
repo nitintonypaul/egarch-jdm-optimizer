@@ -19,9 +19,10 @@ def decor():
 # Argument object
 parser = argparse.ArgumentParser(description="Process stocks and investments")
 
-# Adding arguments 'stock' and 'investment'
+# Adding arguments 'stock', 'investment' and 'risk'
 parser.add_argument('--stock', action='append', help="Ticker Symbol", required=True)
 parser.add_argument('--investment', action='append', type=float, help="Investment amount", required=True)
+parser.add_argument('--risk', type=float, help="Risk Aversion Factor", required=False, default=0.35)
 
 # Parsing arguments
 try:
@@ -30,9 +31,10 @@ except:
     print("Please include the above arguments and try again.")
     sys.exit(0)
 
-# Obtaining stocks list and the corresponding investments list
+# Obtaining stocks list and the corresponding investments list along with risk factor
 stocks = args.stock
 investments = args.investment
+RA = args.risk
 
 # Checking whether each stock has an investment
 # Displaying message and exiting with 0 status
@@ -155,7 +157,7 @@ print(" ")
 display_summary(datalist)
 
 # Obtaining optimized data list (MVO)
-datalist = optimize(datalist)
+datalist = optimize(datalist, RA)
 
 # Checking if datalist is None
 # None means the portfolio cannot be optimized since all investments result in losses
