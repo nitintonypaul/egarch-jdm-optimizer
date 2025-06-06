@@ -195,102 +195,64 @@ return (LHS <= RHS); // Returns true if Armijo condition is met
 
 ## 4. Merton Jump Diffusion Model
 
-### Model Equation
+The **Merton Jump Diffusion (MJD) model** is a powerful extension of the standard Black-Scholes model, designed to capture sudden, discontinuous price movements (jumps) often observed in financial markets, alongside continuous, small fluctuations. It's particularly useful for modeling asset prices that exhibit fat tails and skewness in their return distributions, which standard models often miss.
 
-The price dynamics under Merton’s Jump Diffusion are given by:
+### Mathematical Formulation
 
-$$
-S_t = S_0 \exp\Bigl((\mu - 0.5\sigma^2 - k\lambda)t + \sigma W_t + \sum_{i=1}^{N(t)} J_i\Bigr)
-$$
+The price dynamics under Merton’s Jump Diffusion are governed by the following stochastic differential equation for the asset price $S_t$:
 
-- $$S_t$$: Asset price at time $$t$$.
-- $$S_0$$: Initial (current) asset price.
-- $$\mu$$: Continuous drift term (expected return rate).
-- $$\sigma$$: Diffusion volatility (standard deviation of continuous returns).
-- $$W_t$$: Wiener process ($$W_t \sim \mathcal{N}(0,t)$$) capturing Brownian motion.
-- $$t$$: Time horizon in trading years (e.g., $$t=1/252$$ for one trading day).
-- $$\lambda$$: Jump intensity (expected number of jumps per unit time).
-- $$k$$: Mean jump size, defined as $$k = mean(ln(1 + J))$$ where $$J$$ are proportional jump magnitudes.
-  
-- $$N(t)$$: Poisson process counting the number of jumps by time $$t$$, with $$N(t)\sim \mathrm{Poisson}(\lambda t)$$.
-- $$J_i$$: Log-jump magnitudes, typically drawn from
+$$S_t = S_0 \exp\left(\left(\mu - \frac{1}{2}\sigma^2 - k\lambda\right)t + \sigma W_t + \sum_{i=1}^{N(t)} \ln(1+J_i)\right)$$
 
-$$
-ln(J_i) \sim \mathcal{N}\bigl(\ln(1 + k) - 0.5\sigma_j^2,\sigma_j^2\bigr)
-$$
-  
-  where $$\sigma_j$$ is jump volatility (std of $$\ln(1+J_i)$$).
+Let's break down the components of this equation:
 
-### Variable Interpretations
+* $S_t$: The asset price at time $t$.
+* $S_0$: The initial (current) asset price.
+* $\mu$: The **continuous drift term**, representing the expected return rate from the continuous part of the process.
+* $\sigma$: The **diffusion volatility**, which is the standard deviation of the continuous returns (Brownian motion).
+* $W_t$: A **Wiener process** ($W_t \sim \mathcal{N}(0,t)$), modeling the continuous, random fluctuations (Brownian motion).
+* $t$: The time horizon, typically in trading years (e.g., $1/252$ for one trading day).
+* $\lambda$: The **jump intensity**, representing the average number of jumps expected per unit of time.
+* $N(t)$: A **Poisson process** ($N(t)\sim \mathrm{Poisson}(\lambda t)$), which counts the number of jumps that occur up to time $t$.
+* $k$: The **mean jump size**, defined as $k = E[\ln(1+J)]$, where $J$ represents the proportional jump magnitude.
+* $\ln(1+J_i)$: The **log-jump magnitudes**, which are random variables typically assumed to be normally distributed:
+    $$\ln(1+J_i) \sim \mathcal{N}\left(\ln(1+k) - \frac{1}{2}\sigma_j^2, \sigma_j^2\right)$$
+    Here, $\sigma_j$ is the **jump volatility**, representing the standard deviation of the log-jump magnitudes.
 
-1. **Drift Adjustment $$(\mu - 0.5\sigma^2 - k\lambda)$$**  
-   - $$\mu$$ is reduced by $$0.5\sigma^2$$ (Itô correction) and by $$k\lambda$$ to maintain unbiased growth when jumps occur.
+The equation effectively combines three forces driving asset prices:
+1.  **Adjusted Continuous Drift:** $(\mu - 0.5\sigma^2 - k\lambda)t$ accounts for the average continuous growth, with adjustments for Itô's lemma ($0.5\sigma^2$) and the mean effect of jumps ($k\lambda$) to ensure the process remains unbiased.
+2.  **Diffusion Term:** $\sigma W_t$ captures the everyday, small, continuous, and normally distributed price movements.
+3.  **Jump Component:** $\sum_{i=1}^{N(t)} \ln(1+J_i)$ adds discrete, sudden shocks to the price whenever a jump event occurs. Each $J_i$ represents a proportional change, reflecting rare, impactful market moves.
 
-2. **Diffusion Term $$\sigma W_t$$**  
-   - Captures continuous, normally distributed fluctuations around the adjusted drift.
+### Monte Carlo Simulation for Expected Price
 
-3. **Jump Component $$\sum_{i=1}^{N(t)} J_i$$**  
-   - Adds discrete, log-normally distributed shocks whenever a jump event occurs.  
-   - Each $$J_i$$ shifts returns by $$\exp(J_i)$$, simulating rare, impactful moves.
+To estimate the expected terminal asset price $S_t$ under the Merton JDM, we employ a **Monte Carlo simulation**. This involves generating a large number of independent sample paths for the asset price and then averaging their terminal values. Our implementation performs $M=200,000$ such simulations, efficiently accumulating the results in a single `double` variable (no arrays needed for storing individual paths).
 
-### Monte Carlo Simulation
+Here's the step-by-step process for each simulation:
 
-To approximate the expected terminal price $$S_t$$ under the Merton JDM, we perform $$M=200,000$$ independent simulations and accumulate results in a single double accumulator (no arrays).
+1.  **Simulate Jump Events:**
+    * First, we determine the number of jumps $N$ that occur over the time horizon $t$ by drawing from a Poisson distribution: $N \sim \mathrm{Poisson}(\lambda t)$.
+    * If $N > 0$, for each jump $j = 1, \dots, N$, we draw a log-jump magnitude $\ln(1+J_j)$ from its specified normal distribution:
+        $$\ln(1+J_j) \sim \mathcal{N}\left(\ln(1+k) - \frac{1}{2}\sigma_j^2, \sigma_j^2\right)$$
+    * The total impact of all jumps for this path is then summed: $J_{sum} = \sum_{j=1}^{N} \ln(1+J_j)$.
 
-#### 1. Per-Simulation Step
-For each simulation $$i=1,...,M$$:
+2.  **Simulate Brownian Motion:**
+    * A random variate $Z_i$ is drawn from a standard normal distribution ($Z_i \sim \mathcal{N}(0,1)$).
+    * The Brownian increment is then calculated as $W_t = \sqrt{t} Z_i$.
 
-##### 1.1 Jumps
-- Sample $$N \sim Poisson(\lambda t)$$
-- If $$N \gt 0$$, draw $$ln(J_j)$$:
+3.  **Compute Terminal Price:**
+    * Using the simulated jump sum and Brownian increment, the terminal price for this specific path is calculated directly from the MJD equation:
+        $$S_t = S_0 \exp\left(\left(\mu - \frac{1}{2}\sigma^2 - k\lambda\right)t + \sigma W_t + J_{sum}\right)$$
 
-$$
-ln(J_j) \sim N(ln(1+k) - 0.5\sigma_j², \sigma_j²)
-$$
+4.  **Accumulate Results:**
+    * The calculated $S_t$ for the current simulation is added to a running sum (`price_sum`). This ensures memory efficiency by not storing all $M$ individual paths.
 
-for $$j=1,...,N$$
-- Compute total jump sum:
-
-$$
-J_{sum} = \sum_{j=1}^{N} J_j
-$$
-
-##### 1.2 Brownian Increment
-Draw $$Z_i \sim N(0,1)$$ and set $$W_t = \sqrt{t Z_i}$$
-
-##### 1.3 Compute Terminal Price
-
-$$
-S_t = S_0 exp((\mu - 0.5\sigma² - k\lambda)t + \sigma W_t + J_{sum})
-$$
-
-<p align="center">
-  OR
-</p>
-
-$$
-S_t = S_0 exp((\bar{r} - \sigma² - k\lambda)t + \sigma W_t + J_{sum})
-$$
-
-##### 1.4 Accumulate
-- Add $$S_t$$ to a running sum:
-
-  ```python
-  price_sum += S_t
-  ```
-
-#### 2. Estimate Expected Price
-After all $$M$$ simulations, compute `expected_price`:
+After all $M$ simulations are completed, the **expected terminal price** is estimated by simply dividing the accumulated `price_sum` by the total number of simulations $M$:
 
 ```python
 expected_price = price_sum / M
 ```
 
-This single double variable yields the average terminal price without storing individual paths.
-
-This streamlined approach directly implements the closed-form update for each path and then divides the accumulated sum by 200,000 to obtain the expected price. No intermediate arrays or multi-step loops are used—each simulation computes one $$S_t$$ and immediately contributes to the average.
-
-These simulated terminal prices feed into portfolio valuation, allowing for more accurate risk assessment by capturing both continuous volatility and discrete jumps. The sample average estimates the expected terminal price under jump diffusion. These simulated prices then feed into portfolio valuation and subsequent optimization.
+This average terminal price is then used for portfolio valuation, providing a more robust risk assessment by explicitly incorporating both continuous volatility and sudden market jumps.
 
 ---
 
@@ -331,8 +293,6 @@ The `optimize` function employs a numerical optimization solver to find the opti
     * **Bounds:** Individual asset weights $w_i$ are constrained to be between $0$ and $1$ ($0 \le w_i \le 1$). This imposes a "long-only" portfolio constraint (no short-selling) and prevents leverage, ensuring that all capital is allocated to existing assets and that no asset holds a negative proportion of the portfolio.
     * **Equality Constraint:** A fundamental equality constraint is applied: $\sum_{i=1}^N w_i = 1$. This ensures that the sum of all portfolio weights equals exactly one, meaning 100% of the available capital is allocated across the selected assets.
 4.  **Weight Post-processing:** After optimization, very small positive weights (below `1e-7`) are effectively rounded down to zero. This is a numerical hygiene step to eliminate negligible allocations that might arise from floating-point inaccuracies, making the resulting portfolio more practical. The remaining non-zero weights are then re-normalized to ensure their sum still equals one, proportionally redistributing the capital from the dropped assets.
-
----
 
 ### 2. Input & Output Data
 
