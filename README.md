@@ -18,7 +18,7 @@
 
 This project demonstrates a portfolio optimizer that integrates advanced volatility and jump-diffusion models with classical mean-variance optimization. The workflow is:
 
-- The user inputs a selection of stocks and the amount they want to invest.
+- The user provides a selection of stocks, an investment amount, and an optional risk aversion factor for MVO.
 - For each stock, the model computes volatility using **EGARCH**, implemented from scratch in C++ using **Conjugate Gradient** method of optimization, capturing time-varying and asymmetric volatility effects.
 - These volatilities feed into a **Monte Carlo simulation under the Merton Jump Diffusion (MJD) model** (also in C++) with 200,000 simulated price paths to estimate expected future prices.
 - The current portfolio valuation based on these simulations is displayed.
@@ -209,10 +209,10 @@ Let's break down the components of this equation:
 * $S_0$: The initial (current) asset price.
 * $\mu$: The **continuous drift term**, representing the expected return rate from the continuous part of the process.
 * $\sigma$: The **diffusion volatility**, which is the standard deviation of the continuous returns (Brownian motion).
-* $W_t$: A **Wiener process** ($W_t \sim \mathcal{N}(0,t)$), modeling the continuous, random fluctuations (Brownian motion).
+* $W_t$: A **Wiener process** ($$W_t \sim \mathcal{N}(0,t)$$), modeling the continuous, random fluctuations (Brownian motion).
 * $t$: The time horizon, typically in trading years (e.g., $1/252$ for one trading day).
 * $\lambda$: The **jump intensity**, representing the average number of jumps expected per unit of time.
-* $N(t)$: A **Poisson process** ($N(t)\sim \mathrm{Poisson}(\lambda t)$), which counts the number of jumps that occur up to time $t$.
+* $N(t)$: A **Poisson process** ($$N(t)\sim \mathrm{Poisson}(\lambda t)$$), which counts the number of jumps that occur up to time $t$.
 * $k$: The **mean jump size**, defined as $k = E[\ln(1+J)]$, where $J$ represents the proportional jump magnitude.
 * $\ln(1+J_i)$: The **log-jump magnitudes**, which are random variables typically assumed to be normally distributed:
     $$\ln(1+J_i) \sim \mathcal{N}\left(\ln(1+k) - \frac{1}{2}\sigma_j^2, \sigma_j^2\right)$$
@@ -379,6 +379,19 @@ python main.py --stock AAPL --investment 10000
 If you encounter build errors on macOS/Linux, ensure you have a **C++ compiler** installed (e.g., **gcc** or **clang**).
 
 On Windows, make sure you have the appropriate **Visual C++ build tools** if you ever need to rebuild extensions.
+
+### 6. Sample input
+
+You can utiliize this sample input to see how the program works
+```bash
+python main.py --stock AAPL --investment 1000 --stock NFLX --investment 2000 --stock NVDA --investment 1250 --risk 0.4
+```
+
+- `--stock` contains the ticker symbol of the stock
+- `--investment` contains the investment amount for the stock
+- `--risk`, an optional argument, contains the risk aversion you wish to feed into the optimization (defaults to 0.35)
+
+**Note**: Risk aversion factors above 0.4 **may** lead to corner solutions for certain investment amounts. Try different values to find your optimal outcome.
 
 ---
 
