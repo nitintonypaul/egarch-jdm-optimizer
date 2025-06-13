@@ -20,7 +20,7 @@ This project demonstrates a portfolio optimizer that integrates advanced volatil
 
 - The user provides a selection of stocks, an investment amount, and an optional risk aversion factor for MVO.
 - For each stock, the model computes volatility using **EGARCH**, implemented from scratch in C++ using **Conjugate Gradient** method of optimization, capturing time-varying and asymmetric volatility effects.
-- These volatilities feed into a **Monte Carlo simulation under the Merton Jump Diffusion (MJD) model** (also in C++) with 200,000 simulated price paths to estimate expected future prices.
+- These volatilities feed into a **Monte Carlo simulation under the Merton Jump Diffusion (MJD) model** (also in C++) with 200,000 simulated price points for each stock to estimate expected future prices.
 - The current portfolio valuation based on these simulations is displayed.
 - Finally, asset allocation is optimized via **Mean-Variance Optimization (MVO)** in Python, reallocating capital toward assets with superior risk-adjusted returns and pruning negligible positions.
 
