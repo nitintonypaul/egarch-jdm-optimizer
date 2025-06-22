@@ -134,8 +134,13 @@ for i in range(len(stocks)):
     mean = mean * 252
     expected_volatility = expected_volatility * math.sqrt(252)
 
+    # Computing drift
+    # Drift is assumed to be constant 
+    # Time varying drift is possible, but adds unwanted complexity and is not beneficial compared to the computing power spent
+    drift = mean + expected_volatility + (lambda_*k)
+
     # Simulating prices using MERTON
-    expected_price = simulate(current_price, mean, expected_volatility, lambda_, k, sig_j, time)
+    expected_price = simulate(current_price, drift, expected_volatility, lambda_, k, sig_j, time)
     
     # Appending data to data list
     datalist.append([stock, investment, current_price, expected_price, (investment/current_price)*expected_price, ((expected_price-current_price)/current_price)*100])

@@ -8,12 +8,17 @@
 namespace py = pybind11;
 
 //Monte Carlo Function
-double simulate (double price, double mean, double vol, double lam, double k, double sig_j, double time) {
+double simulate (double price, double drift, double vol, double lam, double k, double sig_j, double time) {
 
     //Assigning price sum to 0 and a few constants to make things easier
     double price_sum = 0;
     double base_wt = std::pow(time, 0.5);
-    double first_term = mean - (std::pow(vol, 2)) - (lam*k);
+    double first_term = drift - (0.5 * std::pow(vol, 2)) - (lam*k);
+    
+    // The mathematical mistake lies below. I wrongly subtracted volatility and jump correction terms from mean
+    // It should have been volatility
+    // I take up this mistake. It's my fault lol. I'll keep this comment here so you can see how inaccurate it is
+    // double first_term = mean - (std::pow(vol, 2)) - (lam*k);
 
     //J distribution variables
     double J_mean = std::log(1+k)-(std::pow(sig_j, 2)/ (double)2);
