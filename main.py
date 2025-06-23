@@ -137,7 +137,7 @@ for i in range(len(stocks)):
     # Computing drift
     # Drift is assumed to be constant 
     # Time varying drift is possible, but adds unwanted complexity and is not beneficial compared to the computing power spent
-    drift = mean + expected_volatility + (lambda_*k)
+    drift = mean + (0.5 * (expected_volatility**2)) + (lambda_*k)
 
     # Simulating prices using MERTON
     expected_price = simulate(current_price, drift, expected_volatility, lambda_, k, sig_j, time)
