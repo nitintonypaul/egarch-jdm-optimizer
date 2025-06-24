@@ -130,10 +130,6 @@ for i in range(len(stocks)):
     # Computing Average jump frequency over given time
     lambda_ = len(jumps)/(1/time)
 
-    # Annualizing mean and volatility before plugging into JDM
-    mean = mean * 252
-    expected_volatility = expected_volatility * math.sqrt(252)
-
     # Computing drift
     # Drift is assumed to be constant 
     # Time varying drift is possible, but adds unwanted complexity and is not beneficial compared to the computing power spent
@@ -144,7 +140,7 @@ for i in range(len(stocks)):
     
     # Appending data to data list
     datalist.append([stock, investment, current_price, expected_price, (investment/current_price)*expected_price, ((expected_price-current_price)/current_price)*100])
-    print(f"{stock}: {expected_volatility:.6f}")
+    print(f"{stock}: {expected_volatility*math.sqrt(252):.6f}")
 
 # Some decoration
 print(" ")

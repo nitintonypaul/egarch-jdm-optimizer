@@ -32,8 +32,11 @@ double simulate (double price, double drift, double vol, double lam, double k, d
     std::normal_distribution<double> J_dist(J_mean, sig_j);
     std::poisson_distribution<int> poisson(lam*time);
     
-    //Monte Carlo simulations for 200,000 iterations (INDUSTRY STANDARD)
-    for (int i = 0; i < 200000; i++) {
+    // Monte Carlo simulation for a mere 10 iterations
+    // Number of simulations were 200,000 before but reduced to 10 to demonstrate jumps in prices
+    // 200,000 simulations will smoothen down the prices significantly making the price change infinitesmal
+    // The smoothed prices were not ideal to showcase optimal allocation
+    for (int i = 0; i < 10; i++) {
         
         //Wiener Process
         double Z = wiener_dist(gen);
@@ -62,7 +65,7 @@ double simulate (double price, double drift, double vol, double lam, double k, d
     }
 
     //Taking the average result
-    double predicted_price = price_sum / (double) 200000;
+    double predicted_price = price_sum / (double) 10;
 
     //Returning the average result as predicted_price
     return predicted_price;

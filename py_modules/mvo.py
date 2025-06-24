@@ -2,6 +2,7 @@
 import yfinance as yf
 import numpy as np
 from scipy.optimize import minimize
+import time
 
 # Minimizing function
 def risk_return(w, cov, lam, mu):
@@ -28,7 +29,7 @@ def optimize(data, risk_aversion):
     corr = []
     for datum in data:
         stock = yf.Ticker(datum[0])
-        returns = stock.history(period="61d")["Close"]
+        returns = stock.history(period="30d")["Close"]
         log_returns = np.array(np.log(returns / returns.shift(1)).dropna())
         corr.append(log_returns)
 
