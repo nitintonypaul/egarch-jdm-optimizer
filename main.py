@@ -94,13 +94,13 @@ for i in range(len(stocks)):
     returns_array = data["Close"][30:]
 
     # Computing mean for JDM
-    mean = compute_mean(returns_array)
+    mean = compute_mean(returns_array) * 252
 
     # Obtaining volatility and shock array
     vol, shock_array = compute_elements(prices, returns_array)
 
     # Computing expected volatility using EGARCH
-    expected_volatility = estimate(len(shock_array),vol,shock_array)
+    expected_volatility = estimate(len(shock_array),vol,shock_array) * (252**0.5)
 
     #print(f"Debug - {stock}: vol={vol:.8f}, expected_vol={expected_volatility:.8f}")
     #print(f"Debug - {stock}: shock_array length={len(shock_array)}")
@@ -140,7 +140,7 @@ for i in range(len(stocks)):
     
     # Appending data to data list
     datalist.append([stock, investment, current_price, expected_price, (investment/current_price)*expected_price, ((expected_price-current_price)/current_price)*100])
-    print(f"{stock}: {expected_volatility*math.sqrt(252):.6f}")
+    print(f"{stock}: {expected_volatility:.6f}")
 
 # Some decoration
 print(" ")
