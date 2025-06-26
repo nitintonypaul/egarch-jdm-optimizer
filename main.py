@@ -88,7 +88,7 @@ for i in range(len(stocks)):
     # Obtaining jump returns from jump data taken over a period of 1 year
     jumpdata = ticker_obj.history(period="1y")
     jump_prices = jumpdata["Close"]
-    jump_returns = jump_prices.pct_change().dropna()
+    jump_returns = np.log(jump_prices / jump_prices.shift(1)).dropna()
 
     # Returns array to compute shock value
     returns_array = data["Close"][30:]
