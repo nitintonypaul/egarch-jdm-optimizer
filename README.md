@@ -18,7 +18,7 @@
 
 This project demonstrates a portfolio optimizer that integrates advanced volatility and jump-diffusion models with classical mean-variance optimization. The workflow is:
 
-- The user provides a selection of stocks, an investment amount, and an optional risk aversion factor for MVO.
+- The user provides a selection of stocks, an investment amount, an optional risk aversion factor for MVO and the number of simulations for the Monte Carlo engine.
 - For each stock, the model computes volatility using **EGARCH**, implemented from scratch in C++ using **Conjugate Gradient** method of optimization, capturing time-varying and asymmetric volatility effects.
 - These volatilities feed into a **Monte Carlo simulation under the Merton Jump Diffusion (MJD) model** (also in C++) to estimate expected future prices.
 - The current portfolio valuation based on these simulations is displayed.
@@ -225,7 +225,7 @@ The equation effectively combines three forces driving asset prices:
 
 ### Monte Carlo Simulation for Expected Price
 
-To estimate the expected terminal asset price $S_t$ under the Merton JDM, we employ a **Monte Carlo simulation**. Our implementation performs a mere $M=10$ such simulations to demonstrate significant price jumps, efficiently accumulating the results in a single `double` variable (no arrays needed for storing individual paths).
+To estimate the expected terminal asset price $S_t$ under the Merton JDM, we employ a **Monte Carlo simulation**. Our implementation performs $M$ such simulations which is given by the user as an argument (Default is set as 10), efficiently accumulating the results in a single `double` variable (no arrays needed for storing individual paths).
 
 Here's the step-by-step process for each simulation:
 
@@ -310,8 +310,6 @@ The `optimize` function expects a `list` of `list`s, where each inner list repre
 #### Output Data
 
 The function returns a filtered `list` of `list`s which is displayed using the `tabulate` module. This output list is structured identically to the input `data`, but with one crucial modification: the `Initial Investment Amount` (`[1]`) for each stock is updated to reflect the **optimized allocation** derived from the MVO. Stocks that receive zero allocation after optimization or were initially filtered out due to losses are excluded from the returned list. If, after filtering, no profitable investments remain for optimization, the function returns `None`.
-
----
 
 ---
 
@@ -410,12 +408,13 @@ On Windows, make sure you have the appropriate **Visual C++ build tools** if you
 
 You can utiliize this sample input to see how the program works
 ```bash
-python main.py --stock AAPL --investment 1000 --stock NFLX --investment 2000 --stock NVDA --investment 1250 --risk 0.4
+python main.py --stock AAPL --investment 1000 --stock NFLX --investment 2000 --stock NVDA --investment 1250 --risk 0.4 --nsim 100
 ```
 
 - `--stock` contains the ticker symbol of the stock
 - `--investment` contains the investment amount for the stock
 - `--risk`, an optional argument, contains the risk aversion you wish to feed into the optimization (defaults to 0.35)
+- `--nsim`, another optional argument, determines the number of simulations for the Monte Carlo engine. Higher values will smoothen the price while smaller values will show sharp price changes (Defaults to 10)
 
 **Note**: Risk aversion factors above 0.4 **may** lead to corner solutions for certain investment amounts. Try different values to find your optimal outcome.
 
