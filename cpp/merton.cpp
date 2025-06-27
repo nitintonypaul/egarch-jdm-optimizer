@@ -5,10 +5,14 @@
 
 //pybind11 to build into python module
 #include <pybind11/pybind11.h>
+
 namespace py = pybind11;
 
 //Monte Carlo Function
-double simulate (double price, double drift, double vol, double lam, double k, double sig_j, double time) {
+double simulate (double price, double drift, double vol, double lam, double k, double sig_j, double time, int M) {
+
+    // Debugging code
+    // std::cout << "{Debug} Running " << M << " Simulations" << std::endl;
 
     //Assigning price sum to 0 and a few constants to make things easier
     double price_sum = 0;
@@ -32,11 +36,10 @@ double simulate (double price, double drift, double vol, double lam, double k, d
     std::normal_distribution<double> J_dist(J_mean, sig_j);
     std::poisson_distribution<int> poisson(lam*time);
     
-    // Monte Carlo simulation for a mere 10 iterations
-    // Number of simulations were 200,000 before but reduced to 10 to demonstrate jumps in prices
-    // 200,000 simulations will smoothen down the prices significantly making the price change infinitesmal
-    // The smoothed prices were not ideal to showcase optimal allocation
-    for (int i = 0; i < 10; i++) {
+    // Monte Carlo simulation for M simulations 
+    // M is decided by the user
+    // Higher values of M will smoothen the price while shorter values of M have sharp effects
+    for (int i = 0; i < M; i++) {
         
         //Wiener Process
         double Z = wiener_dist(gen);
@@ -65,7 +68,7 @@ double simulate (double price, double drift, double vol, double lam, double k, d
     }
 
     //Taking the average result
-    double predicted_price = price_sum / (double) 10;
+    double predicted_price = price_sum / (double) M;
 
     //Returning the average result as predicted_price
     return predicted_price;

@@ -25,16 +25,19 @@ def optimize(data, risk_aversion):
     if len(data) == 0:
         return None
 
-    # Computing Correlation Matrix
+    # Downloading necessary data from yfinance
+    ticker_array = [ticker[0] for ticker in data]
+    full_returns = yf.download(ticker_array, period="30d", auto_adjust=True)["Close"]
+
+    # Computing correlation matrix
     corr = []
-    for datum in data:
-        stock = yf.Ticker(datum[0])
-        returns = stock.history(period="30d")["Close"]
-        log_returns = np.array(np.log(returns / returns.shift(1)).dropna())
+    for ticker in full_returns.columns:
+        prices = full_returns[ticker]
+        log_returns = np.array(np.log(prices / prices.shift(1)).dropna())
         corr.append(log_returns)
 
-    # Computing expected_returns and declaring  risk aversion factor
-    expected_returns = [(item[3]-item[2])/item[2] for item in data]
+    # Computing expected_returns
+    expected_returns = [item[5]/100 for item in data]
 
     # Computing covariance matrix
     corr = np.vstack(corr)

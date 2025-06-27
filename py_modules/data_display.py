@@ -5,7 +5,7 @@ from tabulate import tabulate
 
 # Function to display data
 def display_data(data, header):
-    print(tabulate(data, headers=header, tablefmt="fancy_grid"))
+    print(tabulate(data, headers=header, tablefmt="grid"))
 
 # Function to display summary
 def display_summary(data):
@@ -20,4 +20,4 @@ def display_summary(data):
     
     # Indicator and displaying data
     print("SUMMARY")
-    print(tabulate(summary_list, headers=["TOTAL INVESTMENT", "TOTAL RETURNS"], tablefmt="fancy_grid"))
+    print(tabulate(summary_list, headers=["TOTAL INVESTMENT", "TOTAL RETURNS"], tablefmt="grid"))
