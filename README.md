@@ -400,23 +400,31 @@ python main.py --stock AAPL --investment 10000
 
 ### 6. Troubleshooting
 
+To know more of the program, type in:
+
+```bash
+python main.py --help
+```
+
 If you encounter build errors on macOS/Linux, ensure you have a **C++ compiler** installed (e.g., **gcc** or **clang**).
 
 On Windows, make sure you have the appropriate **Visual C++ build tools** if you ever need to rebuild extensions.
 
 ### 7. Sample input
 
-You can utiliize this sample input to see how the program works
+You can utiliize this sample input to see how the program works:
+
 ```bash
-python main.py --stock AAPL --investment 1000 --stock NFLX --investment 2000 --stock NVDA --investment 1250 --risk 0.4 --nsim 100
+python main.py --stock AAPL --investment 1000 --stock NFLX --investment 2000 --stock NVDA --investment 1250 --risk 0.4 --nsim 100 --model merton
 ```
 
 - `--stock` contains the ticker symbol of the stock
 - `--investment` contains the investment amount for the stock
 - `--risk`, an optional argument, contains the risk aversion you wish to feed into the optimization (defaults to 0.35)
 - `--nsim`, another optional argument, determines the number of simulations for the Monte Carlo engine. Higher values will smoothen the price while smaller values will show sharp price changes (Defaults to 10)
+- `--model` is an optional argument which can be used to switch between `merton` and `gbm` models (Defaults to `merton`)
 
-**Note**: Risk aversion factors above 0.4 **may** lead to corner solutions for certain investment amounts. Try different values to find your optimal outcome.
+**Note**: High values of Risk Aversion factor depending upon your investment volume may lead to corner solutions. Try different values to find your optimal outcome.
 
 ---
 
