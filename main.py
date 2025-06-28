@@ -3,13 +3,15 @@ import argparse
 import yfinance as yf
 import sys
 import numpy as np
+import matplotlib.pyplot as plt
 
 # Custom modules 
+# from build_modules.merton import simulate    # Merton Jump Diffusion Model
 from py_modules.data_handler import compute_EGARCH_elements, compute_jump_elements
 from py_modules.data_display import display_data, display_summary
 from py_modules.mvo import optimize    # Mean Variance Optimization
 from build_modules.egarch import estimate    # EGARCH
-from build_modules.merton import simulate    # Merton Jump Diffusion Model
+from build_modules.jump_engine import forecast
 
 # Argument object
 parser = argparse.ArgumentParser(
@@ -60,7 +62,14 @@ if len(stocks) != len(investments):
     sys.exit(0)
 
 # Introduction to the program
-print("----- EGARCH & JDM BASED PORTFOLIO OPTIMIZER -----\n")
+print("----- EGARCH & JDM BASED PORTFOLIO OPTIMIZER -----")
+
+# Warning user for high number of simulations
+if SIMULATIONS > 100:
+    print(f"\n[!] WARNING: RUNNING {SIMULATIONS} SIMULATIONS MAY USE SIGNIFICANT MEMORY.")
+    print("Proceed anyway? (y/n): ", end="")
+    if input().lower() != "y":
+        sys.exit(0)
 
 # Defining time in terms of trading years
 time = 1/252
@@ -70,7 +79,7 @@ headers = ["STOCK","INVESTMENT","CURRENT PRICE", f"EXPECTED PRICE ({int(time*252
 datalist = []
 
 # Some decoration
-print("ESTIMATING VOLATILITY USING EGARCH...")
+print("\nESTIMATING VOLATILITY USING EGARCH...")
 
 # For each stock in stocks
 for i in range(len(stocks)):
@@ -112,8 +121,11 @@ for i in range(len(stocks)):
         lambda_ = 0
     
     # Simulating prices using MERTON
-    expected_price = simulate(current_price, drift, expected_volatility, lambda_, k, sig_j, time, SIMULATIONS)
-    
+    # expected_price = simulate(current_price, drift, expected_volatility, lambda_, k, sig_j, time, SIMULATIONS)
+    price_path = np.array(forecast(current_price, drift, expected_volatility, lambda_, k, sig_j, time, SIMULATIONS))
+    # mean_path = price_path.mean(axis=0)
+    expected_price = price_path.mean(axis=0)[-1]
+
     # Appending data to data list
     datalist.append([stock, investment, current_price, expected_price, (investment/current_price)*expected_price, ((expected_price-current_price)/current_price)*100])
     print(f"{stock}: {expected_volatility*100:.3f}%")

@@ -9,8 +9,8 @@ ext_modules = [
         language="c++"
     ),
     Extension(
-        "merton",
-        ["cpp/merton.cpp"],
+        "jump_engine",
+        ["cpp/jumpEngine.cpp", "cpp/models/merton/merton.cpp"],
         include_dirs=[pybind11.get_include()],
         language="c++"
     ),
