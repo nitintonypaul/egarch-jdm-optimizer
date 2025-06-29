@@ -2,7 +2,6 @@
 import yfinance as yf
 import numpy as np
 from scipy.optimize import minimize
-import time
 
 # Minimizing function
 def risk_return(w, cov, lam, mu):
@@ -60,7 +59,7 @@ def optimize(data, risk_aversion):
 
     # Normalizing to fit complete investment capital
     weights /= np.sum(weights)
-
+    
     # Replacing investment and expected returns with optimized values
     for i in range(len(data)):
         data[i][4] /= data[i][1]

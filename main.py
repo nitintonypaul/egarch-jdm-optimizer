@@ -8,7 +8,8 @@ import matplotlib.pyplot as plt
 # Custom modules 
 # from build_modules.merton import simulate    # Merton Jump Diffusion Model
 from py_modules.data_handler import compute_EGARCH_elements, compute_jump_elements
-from py_modules.data_display import display_data, display_summary
+from py_modules.data_display import display_data, display_summary, plot_portfolio
+from py_modules.var import find_VAR    # Mean Variance Optimization
 from py_modules.mvo import optimize    # Mean Variance Optimization
 from build_modules.egarch import estimate    # EGARCH
 from build_modules.jump_engine import forecast
@@ -41,6 +42,7 @@ parser.add_argument('--investment', action='append', type=float, help="Investmen
 parser.add_argument('--risk', type=float, help="Risk Aversion Factor", required=False, default=0.35)
 parser.add_argument('--nsim', type=int, help="Number of Simulations", required=False, default=10)
 parser.add_argument('--model', type=str, help="Model Specification", required=False, default="merton")
+parser.add_argument('--conf', type=int, help="Value at Risk Confidence %", required=False, default=90)
 args = parser.parse_args()
 
 # Obtaining stocks Arguments from the user
@@ -49,10 +51,15 @@ investments = args.investment
 RA = args.risk
 SIMULATIONS = args.nsim
 MODEL = args.model.lower()
+CONFIDENCE = args.conf
 
 # Checking validity of model given
 if MODEL not in ["gbm", "merton"]:
     print("INVALID MODEL. PLEASE TRY AGAIN.")
+    sys.exit(0)
+
+if CONFIDENCE > 100 or CONFIDENCE < 1:
+    print("INVALID CONFIDENCE %. PLEASE ENTER A VALUE FROM 1-100")
     sys.exit(0)
 
 # Checking whether each stock has an investment
@@ -77,6 +84,10 @@ time = 1/252
 # Table headers and data list
 headers = ["STOCK","INVESTMENT","CURRENT PRICE", f"EXPECTED PRICE ({int(time*252)} DAY)", "EXPECTED RETURN", "GAIN/LOSS (%)"]
 datalist = []
+
+# Declaring portfolio
+PLOTS = 100
+PORTFOLIO_SIMULATIONS = np.zeros((SIMULATIONS,PLOTS))
 
 # Some decoration
 print("\nESTIMATING VOLATILITY USING EGARCH...")
@@ -123,8 +134,10 @@ for i in range(len(stocks)):
     # Simulating prices using MERTON
     # expected_price = simulate(current_price, drift, expected_volatility, lambda_, k, sig_j, time, SIMULATIONS)
     price_path = np.array(forecast(current_price, drift, expected_volatility, lambda_, k, sig_j, time, SIMULATIONS))
-    # mean_path = price_path.mean(axis=0)
     expected_price = price_path.mean(axis=0)[-1]
+
+    # Adding to portfolio wealth
+    PORTFOLIO_SIMULATIONS += price_path * (investment/current_price)
 
     # Appending data to data list
     datalist.append([stock, investment, current_price, expected_price, (investment/current_price)*expected_price, ((expected_price-current_price)/current_price)*100])
@@ -135,12 +148,16 @@ print(f"\n----- CURRENT PORTFOLIO USING {MODEL.upper()} -----")
 display_data(datalist, headers)
 print(" ")
 
-# Displaying Summary
+# Displaying Summary and plotting Portfolio
 display_summary(datalist)
-print("\nOPTIMIZING PORTFOLIO...")
+plot_portfolio(PORTFOLIO_SIMULATIONS, PLOTS)
+
+# Finding VaR and CVaR
+find_VAR(sum(investments), PORTFOLIO_SIMULATIONS, CONFIDENCE)
 
 # Obtaining optimized data list using mean variance optimization
-datalist = optimize(datalist, RA)
+print("\nOPTIMIZING PORTFOLIO...")
+datalist= optimize(datalist, RA)
 
 # Checking if datalist is None
 # None means the portfolio cannot be optimized since all investments result in losses
