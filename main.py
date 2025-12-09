@@ -7,9 +7,9 @@ import numpy as np
 # Custom modules 
 from py_modules.data_handler import compute_EGARCH_elements, compute_jump_elements
 from py_modules.data_display import display_data, display_summary
-from py_modules.mvo import optimize    # Mean Variance Optimization
-from build_modules.egarch import estimate    # EGARCH
-from build_modules.merton import simulate    # Merton Jump Diffusion Model
+from py_modules.mvo import optimize   
+from build_modules.egarch import estimate    
+from build_modules.merton import simulate
 
 # Argument object
 parser = argparse.ArgumentParser(
@@ -66,8 +66,9 @@ print("----- EGARCH & JDM BASED PORTFOLIO OPTIMIZER -----\n")
 time = 1/252
 
 # Table headers and data list
-headers = ["STOCK","INVESTMENT","CURRENT PRICE", f"EXPECTED PRICE ({int(time*252)} DAY)", "EXPECTED RETURN", "GAIN/LOSS (%)"]
+headers = ["STOCK","INVESTMENT","CURRENT PRICE", "EXPECTED PRICE (1 DAY)", "EXPECTED RETURN", "GAIN/LOSS (%)"]
 datalist = []
+egarch_volatility_array = []
 
 # Some decoration
 print("ESTIMATING VOLATILITY USING EGARCH...")
@@ -96,25 +97,19 @@ for i in range(len(stocks)):
     vol, shock_array, mean = compute_EGARCH_elements(prices, returns_array)
     k, lambda_, sig_j = compute_jump_elements(jump_returns, time)
 
-    # Computing expected volatility using EGARCH
-    # Computed volatility is annualized for MJD forecasts
-    expected_volatility = estimate(len(shock_array), vol, shock_array) * (252**0.5)
+    # Computing expected volatility using EGARCH and storing
+    # Volatility is annualized for MJD forecasts
+    expected_volatility = estimate(len(shock_array), vol, shock_array)
+    egarch_volatility_array.append(expected_volatility)
 
-    # Computing drift
-    # Drift is assumed to be constant 
-    # Time varying drift is possible, but adds unwanted complexity and is not beneficial compared to the computing power spent
-    drift = mean + (0.5 * (expected_volatility**2)) + (lambda_*k)
-
-    # Changing jump value for GBM
-    # Will be optimized later for different models
-    # Jump component need not be computed for GBM model
+    # Changing jump arrival rate for GBM (λ = 0)
     if MODEL == "gbm":
         lambda_ = 0
     
-    # Simulating prices using MERTON
-    expected_price = simulate(current_price, drift, expected_volatility, lambda_, k, sig_j, time, SIMULATIONS)
+    # Simulating prices using MJD
+    expected_price = simulate(current_price, mean, expected_volatility * (252**0.5), lambda_, k, sig_j, time, SIMULATIONS)
     
-    # Appending data to data list
+    # Appending to data list
     datalist.append([stock, investment, current_price, expected_price, (investment/current_price)*expected_price, ((expected_price-current_price)/current_price)*100])
     print(f"{stock}: {expected_volatility*100:.3f}%")
 
@@ -128,10 +123,9 @@ display_summary(datalist)
 print("\nOPTIMIZING PORTFOLIO...")
 
 # Obtaining optimized data list using mean variance optimization
-datalist = optimize(datalist, RA)
+datalist = optimize(datalist, RA, egarch_volatility_array)
 
 # Checking if datalist is None
-# None means the portfolio cannot be optimized since all investments result in losses
 if datalist == None:
     print("----- PORTFOLIO CANNOT BE OPTIMIZED. ALL INVESTMENTS ARE FOUND TO RESULT IN LOSSES -----")
     sys.exit(0)
@@ -143,7 +137,3 @@ print(" ")
 
 # Displaying Summary
 display_summary(datalist)
-
-# Demo Argument (10 stocks)
-# cd documents/vscode/opti
-# python main.py --stock AAPL --investment 5000 --stock TSLA --investment 3000 --stock GOOGL --investment 4000 --stock MSFT --investment 3500 --stock AMZN --investment 4500 --stock NVDA --investment 2500 --stock META --investment 2000 --stock JPM --investment 1500 --stock DIS --investment 1800 --stock NFLX --investment 2200

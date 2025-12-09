@@ -1,4 +1,4 @@
-# EGARCH-JDM Based Portfolio Optimizer (MVO)
+# EGARCH-JDM-MVO Pipeline
 
 ---
 
@@ -16,10 +16,10 @@
 
 ## 1. Project Outline
 
-This project demonstrates a portfolio optimizer that integrates advanced volatility and jump-diffusion models with classical mean-variance optimization. The workflow is:
+This project demonstrates a portfolio optimizer that integrates advanced volatility and jump-diffusion models with classical mean-variance optimization. The workflow is the following:
 
 - The user provides a selection of stocks, an investment amount, an optional risk aversion factor for MVO and the number of simulations for the Monte Carlo engine.
-- For each stock, the model computes volatility using **EGARCH**, implemented from scratch in C++ using **Conjugate Gradient** method of optimization, capturing time-varying and asymmetric volatility effects.
+- For each stock, the model computes volatility using **EGARCH**, implemented from scratch in C++ using **Conjugate Gradient** method of optimization.
 - These volatilities feed into a **Monte Carlo simulation under the Merton Jump Diffusion (MJD) model** (also in C++) to estimate expected future prices.
 - The current portfolio valuation based on these simulations is displayed.
 - Finally, asset allocation is optimized via **Mean-Variance Optimization (MVO)** in Python, reallocating capital toward assets with superior risk-adjusted returns and pruning negligible positions.
@@ -39,7 +39,7 @@ The author disclaims all liability for any financial losses or damages that may 
 ---
 ## 3. EGARCH
 
-### 1. What is EGARCH?
+### 1. Definition
 
 The **Exponential Generalized Autoregressive Conditional Heteroskedasticity (EGARCH)** model is a statistical model primarily used in financial econometrics to analyze and forecast the volatility of financial time series, such as asset returns. It extends the traditional [GARCH](https://github.com/nitintonypaul/garch) model by addressing certain limitations, notably its ability to capture the **asymmetric response of volatility to positive and negative shocks**.
 
@@ -47,7 +47,7 @@ Unlike symmetric GARCH models, where only the magnitude of past innovations affe
 
 A key advantage of the EGARCH model is that it models the **logarithm of the conditional variance**. This ensures that the forecasted variance is always positive, even if some of the model parameters are negative, removing the need for non-negativity constraints typically required in standard GARCH models.
 
-### 2. Mathematics of EGARCH
+### 2. Model
 
 The EGARCH(p, q) model for the logarithm of the conditional variance, $\ln(\sigma_t^2)$, is commonly expressed as:
 
@@ -68,12 +68,12 @@ $$\ln(\sigma_t^2) = \omega + \beta_1 \ln(\sigma_{t-1}^2) + \alpha_1 |Z_{t-1}| + 
 In the provided C++ code, the `compute_volatility` function directly implements this recurrence relation for $\ln(\sigma_t^2)$:
 
 ```cpp
-double logsigsq = parameters[2] + (parameters[1] * std::log(std::pow(sig, 2))) + (parameters[0] * std::abs(shockarray[i-1] / sig)) + (parameters[3] * (shockarray[i-1] / sig));
+double logsigsq = s.parameters[2] + (s.parameters[1] * std::log(std::pow(sig, 2))) + (s.parameters[0] * std::abs(shockarray[i-1] / sig)) + (s.parameters[3] * (shockarray[i-1] / sig));
 // The 'parameters' array maps as follows:
-// parameters[0] = alpha
-// parameters[1] = beta
-// parameters[2] = omega
-// parameters[3] = gamma
+// s.parameters[0] = alpha
+// s.parameters[1] = beta
+// s.parameters[2] = omega
+// s.parameters[3] = gamma
 sig = std::sqrt(std::exp(logsigsq)); // Converts log-variance back to standard deviation
 ```
 
@@ -119,7 +119,7 @@ Our `optimize` function implements this calculation:
 // Calculation of the denominator (||gradient_k||^2)
 double beta_denominator = 0;
 for (int j = 0; j < 4; j++) {
-    beta_denominator += gradient[j] * gradient[j];
+    beta_denominator += s.gradient[j] * s.gradient[j];
 }
 
 // ... Call to compute_gradient() to get gradient_{k+1} ...
@@ -127,14 +127,14 @@ for (int j = 0; j < 4; j++) {
 // Calculation of the numerator (||gradient_{k+1}||^2)
 double beta_numerator = 0;
 for (int j = 0; j < 4; j++) {
-    beta_numerator += gradient[j] * gradient[j];
+    beta_numerator += s.gradient[j] * s.gradient[j];
 }
 
 beta = beta_numerator / beta_denominator; // Computes beta_k
 
 // Update direction using Fletcher-Reeves formula
 for(int j = 0; j < 4; j++) {
-    direction[j] = -gradient[j] + (beta * direction[j]);
+    direction[j] = -s.gradient[j] + (beta * direction[j]);
 }
 ```
 
@@ -147,11 +147,11 @@ Once a search direction $d_k$ is determined, finding an appropriate step size $\
 The `backtrack_line_search` function continuously reduces `alpha` until the `armijo_condition` returns `true`:
 
 ```cpp
-double backtrack_line_search(double dir[], const std::vector<double> &shockarray) {
+double backtrack_line_search(double dir[], const std::vector<double> &shockarray, optimizerState &s) {
     double beta = 0.5; // Step multiplier (shrinks alpha by half)
     double alpha = 1;  // Initial step value
 
-    while (!armijo_condition(alpha, dir, shockarray)) {
+    while (!armijo_condition(alpha, dir, shockarray, s)) {
         alpha *= beta; // Decrease alpha
     }
     return alpha;
@@ -183,7 +183,7 @@ double RHS = total_likelihood;
 double product = ARMIJO_C * alpha;
 double tempsum = 0;
 for (int i = 0; i < 4; i++) {
-    tempsum += gradient[i]*dir[i]; // Dot product: gradient(f(x))^T * d
+    tempsum += s.gradient[i]*dir[i]; // Dot product: gradient(f(x))^T * d
 }
 product *= tempsum;
 RHS += product;
@@ -222,6 +222,30 @@ The equation effectively combines three forces driving asset prices:
 1.  **Adjusted Continuous Drift:** $(\mu - 0.5\sigma^2 - k\lambda)t$ accounts for the average continuous growth, with adjustments for Itô's lemma ($0.5\sigma^2$) and the mean effect of jumps ($k\lambda$) to ensure the process remains unbiased.
 2.  **Diffusion Term:** $\sigma W_t$ captures the everyday, small, continuous, and normally distributed price movements.
 3.  **Jump Component:** $\sum_{i=1}^{N(t)} \ln(1+J_i)$ adds discrete, sudden shocks to the price whenever a jump event occurs. Each $J_i$ represents a proportional change, reflecting rare, impactful market moves.
+
+### The Discrete-Time Simulation Formula
+
+To implement this model in a simulation (like Monte Carlo), we use its discrete-time equivalent, which calculates the price change over a small time step, $\Delta t$. The price at the next step, $S_t$, is calculated from the current price, $S_{t-1}$, by modeling the log-return as the sum of three distinct components:
+
+$$S_t = S_{t-1} \times \exp\left( \text{Mean Drift} + \text{Diffusion} + \text{Jumps} \right)$$
+
+Let's break down each component:
+
+1.  **Mean (Drift Component):** This is the predictable, non-random part of the return. It represents the expected growth of the asset from the continuous process over the time step $\Delta t$.
+    $$\text{Mean Drift} = \left(\mu - \frac{1}{2}\sigma^2\right)\Delta t$$
+    Here, $\mu$ is the expected annual return, and the term $\frac{1}{2}\sigma^2$ is the convexity adjustment from Itô's Lemma. $-k\lambda\Delta t$ is the **jump compensator**. This is a crucial term which subtracts the average expected return *from the jump process* ($k$ is the mean jump size, $\lambda$ is the jump frequency) from the continuous drift. This ensures that the total expected return of the combined process remains $\mu$.
+
+2.  **Diffusion (Continuous Volatility):** This component captures the everyday, small, random price fluctuations. It is modeled as a scaled random draw from a standard normal distribution.
+    $$\text{Diffusion} = \sigma \sqrt{\Delta t} Z$$
+    Where $\sigma$ is the annual volatility of the continuous process, and $Z$ is a random variable drawn from the standard normal distribution ($Z \sim \mathcal{N}(0,1)$).
+
+3.  **Jumps (Discontinuous Shocks):** This component models the sudden, large, and infrequent market moves. Over the time step $\Delta t$, we first determine *if* any jumps occur, and then determine their size.
+    $$\text{Jumps} = \sum_{i=1}^{N(\Delta t)} \ln(1+J_i)$$
+    This is a two-step process for each time interval:
+    *   First, the number of jumps, $N(\Delta t)$, is drawn from a Poisson distribution with an expected rate of $\lambda \Delta t$. For small time steps, this will usually be 0 or 1.
+    *   If $N(\Delta t) > 0$, we then draw a random jump size, $J_i$, for each jump from a log-normal distribution.
+
+In a Monte Carlo simulation, these three components are calculated for each time step, summed together inside the exponential, and used to update the asset price. By repeating this process over thousands of paths, we can accurately estimate the expected future price.
 
 ### Monte Carlo Simulation for Expected Price
 
@@ -283,11 +307,10 @@ def risk_return(w, cov, lam, mu):
 
 The `optimize` function employs a numerical optimization solver to find the optimal portfolio weights. The process involves several mathematical and practical steps:
 
-1.  **Data Pre-processing and Filtering:** Initial investment data is filtered to include only assets that show a positive gain/loss percentage. This is a practical heuristic to focus optimization on potentially profitable ventures.
+1.  **Data Pre-processing and Filtering:** Initial investment data is filtered to include only assets that show a positive gain/loss percentage. This is a technique to focus optimization on potentially profitable ventures.
 2.  **Estimation of Inputs ($\Sigma$, $\mu$):**
-    * **Historical Log Returns:** Daily logarithmic returns are calculated from historical closing prices for each asset using `yfinance`. Log returns are preferred in financial modeling for their additive properties and more consistent statistical behavior.
-    * **Covariance Matrix ($\Sigma$):** The covariance matrix is then computed from these historical log returns. This symmetric matrix quantifies the pairwise relationships between the returns of different assets, where diagonal elements are variances and off-diagonal elements are covariances. It is a critical measure of **portfolio risk**.
-    * **Expected Returns ($\mu$):** Expected returns for individual assets are calculated as the percentage change from `current price` to `expected price`. This serves as the $\mu$ vector for the optimization problem.
+    * **Covariance Matrix ($\Sigma$):** The covariance matrix is constructed using **historical correlations** combined with **EGARCH-estimated volatilities**. Correlations describe how assets co-move, while the EGARCH volatilities provide asset-specific risk levels. The result is a symmetric matrix where diagonal entries represent variances and off-diagonal terms capture covariances.
+    * **Expected Returns ($\mu$):** Expected returns are derived from the **Merton jump-diffusion model**, which incorporates both continuous price dynamics and discrete jump behavior. This produces a forward-looking $\mu$ vector that reflects richer market dynamics than simple historical averages.
 3.  **Numerical Minimization:** The `scipy.optimize.minimize` function is used to solve the constrained minimization problem.
     * **Solver:** The 'SLSQP' (Sequential Least SQuares Programming) method is chosen. SLSQP is an iterative algorithm designed for non-linear optimization problems with both equality and inequality constraints. It approximates the Hessian of the Lagrangian function using a quasi-Newton method and solves a sequence of quadratic programming subproblems.
     * **Bounds:** Individual asset weights $w_i$ are constrained to be between $0$ and $1$ ($0 \le w_i \le 1$). This imposes a "long-only" portfolio constraint (no short-selling) and prevents leverage, ensuring that all capital is allocated to existing assets and that no asset holds a negative proportion of the portfolio.

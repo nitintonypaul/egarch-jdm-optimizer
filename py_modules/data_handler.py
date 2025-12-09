@@ -29,7 +29,7 @@ def compute_jump_elements(jump_returns, time):
 
     # Computing threshold for jumps
     # Values over this threshold is taken as a "jump"
-    threshold = 3 * jump_returns.std()
+    threshold = 2 * jump_returns.std()
 
     # Obtaining jumps in fractions
     jumps = jump_returns[abs(jump_returns) > threshold].tolist()
