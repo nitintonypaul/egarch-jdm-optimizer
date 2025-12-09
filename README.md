@@ -231,15 +231,13 @@ $$S_t = S_{t-1} \times \exp\left( \text{Mean Drift} + \text{Diffusion} + \text{J
 
 Let's break down each component:
 
-1.  **Mean (Drift Component):** This is the predictable, non-random part of the return. It represents the expected growth of the asset from the continuous process over the time step $\Delta t$.
-    $$\text{Mean Drift} = \left(\mu - \frac{1}{2}\sigma^2\right)\Delta t$$
-    Here, $\mu$ is the expected annual return, and the term $\frac{1}{2}\sigma^2$ is the convexity adjustment from Itô's Lemma. $-k\lambda\Delta t$ is the **jump compensator**. This is a crucial term which subtracts the average expected return *from the jump process* ($k$ is the mean jump size, $\lambda$ is the jump frequency) from the continuous drift. This ensures that the total expected return of the combined process remains $\mu$.
+1.  **Mean (Drift Component):** This is the predictable, non-random part of the return. It represents the expected growth of the asset from the continuous process over the time step $\Delta t$. $\text{Mean          Drift} = \left(\mu - \frac{1}{2}\sigma^2 - k\lambda\right)\Delta t$. Here, $\mu$ is the expected annual return, and the term $\frac{1}{2}\sigma^2$ is the convexity adjustment from Itô's Lemma. $-k\lambda$ is the **jump compensator**. This is a crucial term which subtracts the average expected return *from the jump process* ($k$ is the mean jump size, $\lambda$ is the jump frequency) from the continuous drift. This ensures that the total expected return of the combined process remains $\mu$.
 
-2.  **Diffusion (Continuous Volatility):** This component captures the everyday, small, random price fluctuations. It is modeled as a scaled random draw from a standard normal distribution.
+3.  **Diffusion (Continuous Volatility):** This component captures the everyday, small, random price fluctuations. It is modeled as a scaled random draw from a standard normal distribution.
     $$\text{Diffusion} = \sigma \sqrt{\Delta t} Z$$
-    Where $\sigma$ is the annual volatility of the continuous process, and $Z$ is a random variable drawn from the standard normal distribution ($Z \sim \mathcal{N}(0,1)$).
+    Where $\sigma$ is the annual volatility of the continuous process, and $Z$ is a random variable drawn from the standard normal distribution $Z \sim \mathcal{N}(0,1)$.
 
-3.  **Jumps (Discontinuous Shocks):** This component models the sudden, large, and infrequent market moves. Over the time step $\Delta t$, we first determine *if* any jumps occur, and then determine their size.
+4.  **Jumps (Discontinuous Shocks):** This component models the sudden, large, and infrequent market moves. Over the time step $\Delta t$, we first determine *if* any jumps occur, and then determine their size.
     $$\text{Jumps} = \sum_{i=1}^{N(\Delta t)} \ln(1+J_i)$$
     This is a two-step process for each time interval:
     *   First, the number of jumps, $N(\Delta t)$, is drawn from a Poisson distribution with an expected rate of $\lambda \Delta t$. For small time steps, this will usually be 0 or 1.
@@ -254,7 +252,7 @@ To estimate the expected terminal asset price $S_t$ under the Merton JDM, we emp
 Here's the step-by-step process for each simulation:
 
 1.  **Simulate Jump Events:**
-    * First, we determine the number of jumps $N$ that occur over the time horizon $t$ by drawing from a Poisson distribution: $N \sim \mathrm{Poisson}(\lambda t)$.
+    * First, we determine the number of jumps $N$ that occur over the time horizon $t$ by drawing from a Poisson distribution: $N \sim \mathrm{Poisson}(\lambda t)$
     * If $N > 0$, for each jump $j = 1, \dots, N$, we draw a log-jump magnitude $\ln(1+J_j)$ from its specified normal distribution:
         $$\ln(1+J_j) \sim \mathcal{N}\left(\ln(1+k) - \frac{1}{2}\sigma_j^2, \sigma_j^2\right)$$
     * The total impact of all jumps for this path is then summed: $J_{sum} = \sum_{j=1}^{N} \ln(1+J_j)$.
@@ -286,21 +284,19 @@ The core of this optimization lies in **Modern Portfolio Theory (MPT)**, pioneer
 
 The problem is framed as minimizing a **Mean-Variance Utility Function**, which quantifies an investor's preference for return versus their aversion to risk. The objective function to be minimized is:
 
-$$f(w) = \frac{1}{2} w^T \Sigma w - \lambda w^T \mu$$
+$$f(w) = w^\top \mu - \frac{\lambda}{2} w^\top \Sigma w$$
 
 This function represents the investor's utility, where:
 * $w$: A column vector of **portfolio weights**, where each element $w_i$ denotes the proportion of total investment allocated to asset $i$.
 * $\Sigma$: The **covariance matrix** of asset returns. This symmetric matrix quantifies the pairwise relationships between the returns of different assets, where diagonal elements are variances and off-diagonal elements are covariances. It is a critical measure of **portfolio risk**.
 * $\mu$: A column vector of **expected returns** for each asset. These are the anticipated average returns of the individual assets in the portfolio.
-* $\lambda$: The **risk aversion factor** (a scalar, denoted as `risk_aversion` in the code). This parameter governs the investor's preference for return over risk. A higher positive $\lambda$ indicates greater aversion to risk, leading the optimizer to favor portfolios with lower variance.
-
-The first term, $\frac{1}{2} w^T \Sigma w$, represents the **portfolio variance**, which is the mathematical measure of portfolio risk. The second term, $\lambda w^T \mu$, represents the **risk-adjusted expected portfolio return**. By minimizing this combined objective, the algorithm finds a set of weights that optimally balances these two components based on the specified risk aversion.
+* $\lambda$: The **risk aversion factor** (a scalar, denoted as `risk_aversion` in the code). This parameter controls how strongly the investor prioritizes risk reduction over seeking higher returns. A higher positive $\lambda$ indicates greater aversion to risk, leading the optimizer to favor portfolios with lower variance.
 
 The `risk_return` function in the code directly translates this mathematical objective:
 
 ```python
 def risk_return(w, cov, lam, mu):
-    return (0.5 * np.dot(np.dot(w.T,cov), w)) - (lam * np.dot(w, mu.T))
+    return (lam * 0.5 * np.dot(np.dot(w.T,cov), w)) - np.dot(w, mu.T)
 ```
 
 ### 1. Optimization Process and Constraints
